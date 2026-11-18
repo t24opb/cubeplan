@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SmartPallet Container Builder</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- app:start -->
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="7" fill="var(--accent)"/>
+        <path d="M16 6.5 25 11v10l-9 4.5L7 21V11z" fill="none" stroke="var(--accent-ink)" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M7 11l9 4.5 9-4.5M16 15.5v10" fill="none" stroke="var(--accent-ink)" stroke-width="1.8" stroke-linejoin="round"/>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-name">SmartPallet</span>
+        <span class="brand-sub">Container Builder</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="btn quiet" id="btn-sample">Load example</button>
+      <label class="btn quiet" for="file-import" tabindex="0" id="lbl-import">Import products</label>
+      <input type="file" id="file-import" accept=".json,.csv,.txt,application/json,text/csv" hidden>
+      <button type="button" class="btn solid" id="btn-copy">Copy plan</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="rules" aria-label="Rules for the load">
+    <div class="rule rule-types">
+      <span class="rule-label">Containers allowed</span>
+      <div class="chips" id="type-chips"></div>
+      <button type="button" class="link" id="btn-types" aria-expanded="false" aria-controls="types-editor">Sizes and costs</button>
+    </div>
+    <div class="rule">
+      <label class="rule-label" for="in-kpi">Every container at least</label>
+      <div class="rule-control">
+        <input type="range" id="in-kpi" min="50" max="100" step="1">
+        <output id="out-kpi" for="in-kpi" class="rule-value"></output>
+      </div>
+    </div>
+    <div class="rule">
+      <label class="rule-label" for="in-change">Quantities may change by up to</label>
+      <div class="rule-control">
+        <span class="unit-field"><span class="pre">±</span><input type="number" id="in-change" min="0" max="100" step="1" inputmode="decimal"><span class="post">%</span></span>
+      </div>
+    </div>
+    <div class="rule">
+      <label class="rule-label" for="in-gap" title="Held back from the container's length, width and height, the same way the app does">Safety gap</label>
+      <div class="rule-control">
+        <span class="unit-field"><input type="number" id="in-gap" min="0" max="50" step="1" inputmode="decimal"><span class="post">cm</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel types-editor" id="types-editor" hidden>
+    <div class="scroll-x">
+      <table class="table types-table">
+        <thead>
+          <tr><th>Use</th><th class="left">Container</th><th>Length cm</th><th>Width cm</th><th>Height cm</th><th>Payload kg</th><th>Freight cost</th><th></th></tr>
+        </thead>
+        <tbody id="types-body"></tbody>
+      </table>
+    </div>
+    <div class="types-foot">
+      <button type="button" class="btn quiet small" id="btn-add-type">Add a container type</button>
+      <span class="hint">Inside sizes. Leave freight cost at 0 to choose containers by how much they hold.</span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="panel plan" aria-label="Load plan">
+      <div class="options" id="options"></div>
+      <p class="advice" id="advice"></p>
+
+      <div class="stage" id="stage">
+        <div class="stage-head">
+          <div class="stage-title" id="stage-title"></div>
+          <div class="stage-tools">
+            <button type="button" class="tool" id="btn-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+            <button type="button" class="tool" id="btn-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+            <button type="button" class="tool wide" id="btn-auto" aria-pressed="true">Turning</button>
+            <button type="button" class="tool wide" id="btn-reset">Reset view</button>
+          </div>
+        </div>
+        <div class="stage-empty" id="stage-empty" hidden></div>
+        <div class="stage-tip" id="stage-tip" hidden></div>
+        <div class="stage-foot" id="stage-foot">
+          <label for="in-seq">Loading order</label>
+          <input type="range" id="in-seq" min="0" max="100" value="100" step="1">
+          <output id="out-seq" for="in-seq"></output>
+        </div>
+        <p class="stage-fallback">The 3D view needs WebGL, which this browser has turned off. The plan below is still correct.</p>
+      </div>
+
+      <div class="containers" id="containers"></div>
+    </section>
+
+    <section class="panel order" aria-label="Order">
+      <div class="panel-head">
+        <h2>Order</h2>
+        <button type="button" class="btn quiet small" id="btn-add">Add a product</button>
+      </div>
+      <div class="scroll-x">
+        <table class="table order-table">
+          <thead>
+            <tr>
+              <th class="left">Product</th>
+              <th>Ordered</th>
+              <th title="A locked product's quantity is never changed">Lock</th>
+              <th title="This product's own limit. Blank uses the general limit above.">Limit ±%</th>
+              <th>Planned</th>
+              <th>Change</th>
+            </tr>
+          </thead>
+          <tbody id="order-body"></tbody>
+          <tfoot id="order-foot"></tfoot>
+        </table>
+      </div>
+      <p class="hint order-hint" id="order-hint">Select a product to see its carton and change its size. Quantities are cartons.</p>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <p>Prototype. Plans are worked out in your browser and kept on this device only. A carton always stands on the floor or wholly on the cartons beneath it; weight spread, axle limits and load restraint are not checked.</p>
+  </footer>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="sheet" id="copy-sheet" hidden>
+  <div class="sheet-card">
+    <h2>Copy the plan</h2>
+    <p class="hint">Your browser would not copy it for you. Select the text and copy it.</p>
+    <textarea id="copy-text" rows="10" readonly></textarea>
+    <button type="button" class="btn solid" id="btn-copy-close">Done</button>
+  </div>
+</div>
+<!-- app:end -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/packer.js"></script>
+<script src="js/data.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
