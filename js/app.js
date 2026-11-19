@@ -25,9 +25,19 @@
     CARTON_FIELDS.forEach(function (key) { item[key] = line[key]; });
     return item;
   }
-  function restore() {
+  // Business accounts. Signed in to a business, the library is that
+  // business's shared products; otherwise the page works on its own.
+  var Cloud = window.SPCloud || { available: false };
+  function inBusiness() { return !!(Cloud.available && Cloud.user && Cloud.business); }
+  function businessKey(id) { return 'cubeplanner.business.' + id + '.v1'; }
+  function storageKey() { return inBusiness() ? businessKey(Cloud.business.id) : KEY; }
+  function blank() {
+    return { library: [], products: [], types: D.defaultContainers(), settings: { kpi: 85, maxChange: 5, gap: 5 }, choice: 'auto', example: false };
+  }
+
+  function restore(key) {
     try {
-      var saved = JSON.parse(window.localStorage.getItem(KEY));
+      var saved = JSON.parse(window.localStorage.getItem(key || KEY));
       if (saved && Array.isArray(saved.products) && Array.isArray(saved.types) && saved.types.length && saved.settings) {
         // Saved before there was a library: every order line becomes a
         // library product too.
@@ -47,8 +57,13 @@
   function save() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
-      try { window.localStorage.setItem(KEY, JSON.stringify(state)); } catch (ignore) { /* storage is off */ }
+      try { window.localStorage.setItem(storageKey(), JSON.stringify(state)); } catch (ignore) { /* storage is off */ }
     }, 300);
+  }
+  /** Writes the current order straight away, under the key it belongs to. */
+  function saveNow(key) {
+    clearTimeout(saveTimer);
+    try { window.localStorage.setItem(key, JSON.stringify(state)); } catch (ignore) { /* storage is off */ }
   }
 
   var state = restore() || fresh();
@@ -139,7 +154,9 @@
   }
 
   function renderLibrary() {
-    $('lib-count').textContent = state.library.length ? state.library.length + (state.library.length === 1 ? ' product' : ' products') : '';
+    var count = state.library.length ? state.library.length + (state.library.length === 1 ? ' product' : ' products') : '';
+    $('lib-count').textContent = inBusiness() ? Cloud.business.name + (count ? ' · ' + count : '') : count;
+    var mayRemove = !inBusiness() || Cloud.isAdmin();
     $('lib-list').innerHTML = state.library.map(function (item) {
       var line = lineFor(item.id);
       return '<div class="lib-item" draggable="true" data-lib="' + item.id + '" title="Drag onto the container">' +
@@ -147,9 +164,11 @@
         '<span><span class="lib-name">' + esc(item.name) + '</span><span class="lib-size">' + esc(num(item.l) + ' × ' + num(item.w) + ' × ' + num(item.h) + ' cm') + '</span>' +
         (line && line.qty > 0 ? '<span class="lib-in">' + int(line.qty) + ' in the load</span>' : '') + '</span>' +
         '<span class="lib-actions"><button type="button" class="lib-btn" data-act="add" aria-label="Add ' + esc(item.name) + ' to the load" title="Add to the load">+</button>' +
-        (line ? '' : '<button type="button" class="lib-btn remove" data-act="forget" aria-label="Remove ' + esc(item.name) + ' from the library" title="Remove from the library">×</button>') +
+        (line || !mayRemove ? '' : '<button type="button" class="lib-btn remove" data-act="forget" aria-label="Remove ' + esc(item.name) + ' from the library" title="Remove from the library">×</button>') +
         '</span></div>';
-    }).join('') || '<p class="lib-empty">No products yet. Import a file from the app, or add a product to the order.</p>';
+    }).join('') || '<p class="lib-empty">' + (inBusiness()
+      ? 'No products set up for ' + esc(Cloud.business.name) + ' yet. Import a file from the app, or use Add a product in the order.'
+      : 'No products yet. Import a file from the app, or add a product to the order.') + '</p>';
   }
 
   /** Asks how many cartons of a library product to add, offering what fits. */
@@ -426,6 +445,190 @@
   function recalcSoon() { clearTimeout(recalcTimer); recalcTimer = setTimeout(function () { recalc(true); }, 90); }
   function edited() { state.example = false; }
 
+  // ---------- business accounts ----------
+  function cloudFailed(error) {
+    toast('That could not be saved for your business: ' + (error && error.message ? error.message : 'no connection') + '.');
+  }
+
+  /** Sends a changed product to the business a moment after the last edit. */
+  var shareTimers = {};
+  function shareSoon(item) {
+    if (!inBusiness()) return;
+    clearTimeout(shareTimers[item.id]);
+    shareTimers[item.id] = setTimeout(function () {
+      delete shareTimers[item.id];
+      if (inBusiness() && libraryItem(item.id)) Cloud.updateProduct(item).catch(cloudFailed);
+    }, 700);
+  }
+
+  function renderAccount() {
+    var el = $('account');
+    if (!Cloud.available) { el.hidden = true; return; }
+    if (!Cloud.user) {
+      el.innerHTML = '<button type="button" class="btn quiet" data-account="signin">Sign in</button>';
+    } else if (Cloud.business) {
+      el.innerHTML = '<button type="button" class="btn quiet" data-account="team" title="' + esc(Cloud.user.email) + '"><span class="who">' + esc(Cloud.business.name) + '</span></button>' +
+        '<button type="button" class="btn quiet" data-account="signout">Sign out</button>';
+    } else {
+      el.innerHTML = '<button type="button" class="btn quiet" data-account="signout">Sign out</button>';
+    }
+    $('btn-sample').hidden = inBusiness();
+  }
+
+  function resetView() {
+    openId = null; litId = null; contIndex = 0; needed = null;
+    renderRules(); renderTypes(); renderOrder(); recalc();
+  }
+
+  /** The business's products become the library; the order follows them. */
+  function applyLibrary(items) {
+    items.forEach(function (item, index) { if (!item.colour) item.colour = D.COLOURS[index % D.COLOURS.length]; });
+    state.library = items;
+    // A product a colleague has changed is changed here too; one they
+    // have removed leaves the order.
+    state.products = state.products.filter(function (line) { return !!libraryItem(line.lib); });
+    state.products.forEach(function (line) {
+      var item = libraryItem(line.lib);
+      CARTON_FIELDS.forEach(function (key) { line[key] = item[key]; });
+    });
+    openId = null;
+    renderOrder(); recalc();
+  }
+
+  /** Which set of data is on screen: a business's id, or null for this browser's own. */
+  var showing = null;
+  function onCloudChange() {
+    renderAccount();
+    if (Cloud.user) $('signin-sheet').hidden = true;
+    var needsBusiness = !!(Cloud.user && Cloud.ready && !Cloud.business);
+    if (needsBusiness && $('business-sheet').hidden) {
+      $('business-hint').textContent = 'You are signed in as ' + Cloud.user.email + ', and that address does not belong to a business yet. Create one here; you can then invite your colleagues. If your business is already set up, ask its admin to invite this address instead.';
+      $('business-note').hidden = true;
+    }
+    $('business-sheet').hidden = !needsBusiness;
+    var next = inBusiness() ? Cloud.business.id : null;
+    if (next === showing) return;
+    // Put away what is on screen under its own key before swapping.
+    saveNow(showing ? businessKey(showing) : KEY);
+    showing = next;
+    if (!next) {
+      state = restore(KEY) || fresh();
+      resetView();
+      return;
+    }
+    state = restore(businessKey(next)) || blank();
+    state.example = false;
+    resetView();
+    Cloud.products().then(function (items) {
+      if (showing === next) applyLibrary(items);
+    }).catch(function (error) { toast('Your business\'s products could not be loaded: ' + error.message + '.'); });
+  }
+
+  function note(id, message, bad) {
+    var el = $(id);
+    el.hidden = !message;
+    el.textContent = message || '';
+    el.className = 'sheet-note' + (bad ? ' bad' : '');
+  }
+
+  function renderTeam() {
+    if (!inBusiness()) { $('team-sheet').hidden = true; return; }
+    $('team-title').textContent = Cloud.business.name;
+    $('team-hint').textContent = 'You are signed in as ' + Cloud.user.email + '. Everyone listed here sees the products set up for this business.';
+    $('invite-form').hidden = !Cloud.isAdmin();
+    var several = Cloud.businesses.length > 1;
+    $('team-switch-field').hidden = !several;
+    if (several) {
+      $('team-switch').innerHTML = Cloud.businesses.map(function (b) {
+        return '<option value="' + esc(b.id) + '"' + (b.id === Cloud.business.id ? ' selected' : '') + '>' + esc(b.name) + '</option>';
+      }).join('');
+    }
+    $('team-list').innerHTML = '<div class="team-row"><span class="role">Loading…</span></div>';
+    var business = Cloud.business.id;
+    Cloud.team().then(function (team) {
+      if (!inBusiness() || Cloud.business.id !== business) return;
+      var admin = Cloud.isAdmin();
+      var rows = team.members.map(function (m) {
+        var me = m.user_id === Cloud.user.id;
+        return '<div class="team-row"><span class="email">' + esc(m.email || 'Unknown') + (me ? ' (you)' : '') + '</span><span class="side"><span class="role">' + (m.role === 'admin' ? 'Admin' : 'Member') + '</span>' +
+          (admin || me ? '<button type="button" class="link" data-remove="' + esc(m.user_id) + '">' + (me ? 'Leave' : 'Remove') + '</button>' : '') + '</span></div>';
+      });
+      team.invitations.forEach(function (i) {
+        rows.push('<div class="team-row"><span class="email">' + esc(i.email) + '</span><span class="side"><span class="role">Invited · joins when they sign in</span>' +
+          '<button type="button" class="link" data-cancel="' + esc(i.id) + '">Cancel</button></span></div>');
+      });
+      $('team-list').innerHTML = rows.join('');
+    }).catch(function (error) { note('team-note', error.message, true); });
+  }
+
+  function bindAccounts() {
+    if (!Cloud.available) return;
+    $('account').addEventListener('click', function (e) {
+      var button = e.target.closest('[data-account]');
+      if (!button) return;
+      var what = button.getAttribute('data-account');
+      if (what === 'signin') {
+        note('signin-note', '');
+        $('signin-send').disabled = false;
+        $('signin-sheet').hidden = false;
+        $('signin-email').focus();
+      } else if (what === 'signout') {
+        Cloud.signOut().catch(cloudFailed);
+      } else {
+        note('team-note', '');
+        $('team-sheet').hidden = false;
+        renderTeam();
+      }
+    });
+    $('signin-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = $('signin-email').value.trim();
+      if (!email) return;
+      $('signin-send').disabled = true;
+      note('signin-note', 'Sending…');
+      Cloud.sendLink(email).then(function () {
+        note('signin-note', 'A sign-in link is on its way to ' + email + '. Open it on this device and you will come back here signed in. It can take a minute to arrive.');
+      }).catch(function (error) {
+        $('signin-send').disabled = false;
+        note('signin-note', 'The link could not be sent: ' + error.message, true);
+      });
+    });
+    $('signin-cancel').addEventListener('click', function () { $('signin-sheet').hidden = true; });
+    $('business-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = $('business-name').value.trim();
+      if (!name) return;
+      note('business-note', 'Creating…');
+      Cloud.createBusiness(name).catch(function (error) { note('business-note', error.message, true); });
+    });
+    $('business-signout').addEventListener('click', function () { Cloud.signOut().catch(cloudFailed); });
+    $('team-close').addEventListener('click', function () { $('team-sheet').hidden = true; });
+    $('team-switch').addEventListener('change', function () { Cloud.choose(this.value); renderTeam(); });
+    $('invite-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var email = $('invite-email').value.trim().toLowerCase();
+      if (!email) return;
+      Cloud.invite(email, $('invite-role').value).then(function () {
+        $('invite-email').value = '';
+        note('team-note', email + ' is invited. Ask them to open this site and sign in with that address; they join ' + Cloud.business.name + ' as soon as they do.');
+        renderTeam();
+      }).catch(function (error) {
+        note('team-note', /duplicate|unique/i.test(error.message) ? 'That address has already been invited.' : error.message, true);
+      });
+    });
+    $('team-list').addEventListener('click', function (e) {
+      var remove = e.target.closest('[data-remove]'), cancel = e.target.closest('[data-cancel]');
+      if (cancel) {
+        Cloud.cancelInvitation(cancel.getAttribute('data-cancel')).then(renderTeam).catch(function (error) { note('team-note', error.message, true); });
+      } else if (remove) {
+        var person = remove.getAttribute('data-remove'), me = person === Cloud.user.id;
+        Cloud.removeMember(person).then(function () {
+          if (me) { $('team-sheet').hidden = true; window.location.reload(); } else renderTeam();
+        }).catch(function (error) { note('team-note', error.message, true); });
+      }
+    });
+  }
+
   // ---------- copy ----------
   function planText() {
     var shown = plan();
@@ -575,7 +778,10 @@
       updateRowLabel(p);
       // The same carton in the library follows.
       var item = libraryItem(p.lib);
-      if (item && CARTON_FIELDS.indexOf(f) >= 0) item[f] = p[f];
+      if (item && CARTON_FIELDS.indexOf(f) >= 0) {
+        item[f] = p[f];
+        shareSoon(item);
+      }
       if ((f === 'l' || f === 'w' || f === 'h') && e.type === 'change' && cartonViewer && cartonViewer.ok && p.id === openId) cartonViewer.showCarton(p);
       recalcSoon();
     }
@@ -586,6 +792,20 @@
     body.addEventListener('change', fieldChanged);
 
     $('btn-add').addEventListener('click', function () {
+      if (inBusiness()) {
+        // The product is created for the whole business first.
+        var draft = D.product({ name: 'New product', l: 60, w: 40, h: 30, weight: 10, qty: 0, tippable: false }, state.library.length);
+        Cloud.addProducts([draft], 'manual').then(function (saved) {
+          state.library.push(saved[0]);
+          var line = D.orderLine(saved[0], 100);
+          state.products.push(line);
+          openId = line.id; litId = line.id;
+          renderOrder(); recalc();
+          var field = $('d-name');
+          if (field) { field.focus(); field.select(); }
+        }).catch(cloudFailed);
+        return;
+      }
       var p = D.product({ name: 'New product', l: 60, w: 40, h: 30, weight: 10, qty: 100, tippable: false }, state.library.length);
       var entry = libraryCopy(p);
       state.library.push(entry);
@@ -615,8 +835,24 @@
       reader.onload = function () {
         try {
           // An untouched example is replaced; otherwise the file is added.
-          var replacing = state.example;
+          var replacing = state.example && !inBusiness();
           var read = D.parseProducts(String(reader.result), replacing ? 0 : state.library.length);
+          if (inBusiness()) {
+            // Into the business's shared products; rows with a quantity also go on this order.
+            Cloud.addProducts(read.products, 'import').then(function (saved) {
+              var onOrder = 0;
+              saved.forEach(function (item, index) {
+                state.library.push(item);
+                if (read.products[index] && read.products[index].qty > 0) { state.products.push(D.orderLine(item, read.products[index].qty)); onOrder++; }
+              });
+              state.choice = 'auto'; openId = null; litId = null;
+              renderOrder(); recalc();
+              toast(plural(saved.length, 'product') + ' added for ' + Cloud.business.name + '.' + (onOrder ? ' ' + onOrder + ' with a quantity ' + (onOrder === 1 ? 'is' : 'are') + ' on the order.' : '') +
+                (read.skipped ? ' ' + read.skipped + ' skipped (no size).' : ''));
+            }).catch(cloudFailed);
+            input.value = '';
+            return;
+          }
           if (replacing) { state.library = []; state.products = []; }
           var ordered = 0;
           read.products.forEach(function (p) {
@@ -647,6 +883,20 @@
       if (act.getAttribute('data-act') === 'add') { openAdd(id); return; }
       var index = state.library.indexOf(libraryItem(id)), removed = state.library[index];
       if (index < 0 || lineFor(id)) return;
+      if (inBusiness()) {
+        // Removed for everyone in the business.
+        Cloud.deleteProduct(id).then(function () {
+          state.library.splice(index, 1);
+          renderLibrary(); save();
+          toast(removed.name + ' removed for everyone at ' + Cloud.business.name + '.', 'Undo', function () {
+            var back = {};
+            Object.keys(removed).forEach(function (key) { back[key] = removed[key]; });
+            back.keepId = true;
+            Cloud.addProducts([back], 'manual').then(function (saved) { state.library.splice(index, 0, saved[0]); renderLibrary(); save(); }).catch(cloudFailed);
+          });
+        }).catch(cloudFailed);
+        return;
+      }
       state.library.splice(index, 1);
       edited(); renderLibrary(); save();
       toast(removed.name + ' removed from the library.', 'Undo', function () { state.library.splice(index, 0, removed); renderLibrary(); save(); });
@@ -689,6 +939,7 @@
     $('add-form').addEventListener('submit', function (e) { e.preventDefault(); confirmAdd(); });
     $('add-cancel').addEventListener('click', function () { $('add-sheet').hidden = true; adding = null; });
 
+    bindAccounts();
     $('btn-copy').addEventListener('click', copyPlan);
     $('btn-copy-close').addEventListener('click', function () { $('copy-sheet').hidden = true; });
 
@@ -738,6 +989,11 @@
       $('stage').classList.add('no-webgl');
     }
     renderRules(); renderTypes(); bind(); renderOrder(); recalc();
+    if (Cloud.available) {
+      $('account').hidden = false;
+      renderAccount();
+      Cloud.start(onCloudChange);
+    }
     // Sprite labels are drawn with the display font; redraw once it has loaded.
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function () { if (openId && cartonViewer && cartonViewer.ok) cartonViewer.showCarton(product(openId)); });

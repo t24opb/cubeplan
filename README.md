@@ -17,6 +17,11 @@ shows what it would take to fill every container properly.
   that meets the minimum fill with the least change to the order.
 - **3D** — the loaded container and each carton, turning, like the app.
 
+- **Business accounts** — Sign in (a link is emailed; no password) to work in
+  your business. Everyone in the business sees the same products, and an
+  admin invites colleagues by email. Without signing in, the site works on its
+  own with the example. See `supabase/README.md`.
+
 ## Run it
 
 It is a static site: no build step, no server code.
@@ -35,12 +40,14 @@ internet.)
 | `js/data.js` | Container sizes (same as the app's), the example order, file import |
 | `js/scene.js` | The 3D views |
 | `js/app.js` | The page's behaviour |
+| `js/cloud.js`, `js/config.js` | Business accounts: sign-in and shared products (Supabase) |
+| `supabase/schema.sql` | The accounts database: tables and who may see what |
 | `tests/packer.test.js` | `node website/tests/packer.test.js` |
 | `tests/bench.js` | How full containers get on 200 made-up furniture orders |
 | `tools/build_single_page.py` | Writes `dist/container-builder.html`, the one-file version |
 
 ## Not built yet
 
-Palletised loads (cartons on pallets, pallets in the container), accounts and
-saving plans to a server, a live link from the app, weight distribution and
+Palletised loads (cartons on pallets, pallets in the container), saving
+orders and plans to the business account (they stay in the browser), a live link from the app, weight distribution and
 load restraint checks.

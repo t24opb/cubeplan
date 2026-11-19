@@ -164,6 +164,23 @@ body.dragging-product .stage-drop { display: flex; }
 body.dragging-product .stage.drop-over .stage-drop { background: var(--accent-soft); opacity: 0.9; }
 body.dragging-product .order { outline: 2px dashed var(--accent); outline-offset: -2px; }
 .sheet-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.sheet-card .field.wide-field { max-width: none; }
+.sheet-card .field input[type="email"], .sheet-card .field input[type="text"], .sheet-card .field select {
+  width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: inherit; color: inherit;
+}
+.sheet-note { font-size: 13.5px; padding: 9px 11px; border-radius: 8px; background: var(--accent-soft); }
+.sheet-note.bad { background: var(--bad-soft); color: var(--bad); }
+.account { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.account .who { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+.team-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.team-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; border-top: 1px solid var(--line); font-size: 13.5px; }
+.team-row:first-child { border-top: 0; }
+.team-row .email { min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.team-row .role { color: var(--ink-2); font-size: 12.5px; white-space: nowrap; }
+.team-row .side { display: flex; align-items: center; gap: 10px; flex: none; }
+.invite { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 8px; align-items: end; }
+.invite .btn { min-height: 38px; }
+@media (max-width: 520px) { .invite { grid-template-columns: minmax(0, 1fr); } }
 .sheet-card .field { grid-column: auto; max-width: 180px; }
 .sheet-card .field input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: 600 18px/1 var(--display); font-variant-numeric: tabular-nums; }
 .plan { padding: 14px; display: flex; flex-direction: column; gap: 12px; }

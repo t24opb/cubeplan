@@ -12,7 +12,10 @@ page = (root / "index.html").read_text()
 body = page.split("<!-- app:start -->")[1].split("<!-- app:end -->")[0].strip()
 fonts = re.search(r'<link rel="stylesheet" href="(https://fonts\.googleapis\.com[^"]+)">', page).group(1)
 three = re.search(r'<script src="(https://cdnjs\.cloudflare\.com[^"]+)"></script>', page).group(1)
-scripts = re.findall(r'<script src="(js/[^"]+)"></script>', page)
+# The one-file version cannot reach the accounts service (a Claude artifact
+# may not call other servers), so it is built without the connection
+# settings and works on its own.
+scripts = [s for s in re.findall(r'<script src="(js/[^"]+)"></script>', page) if s != "js/config.js"]
 
 out = [
     "<title>CubePlanner</title>",
