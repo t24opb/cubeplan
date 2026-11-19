@@ -1,6 +1,6 @@
-# SmartPallet Container Builder (website prototype)
+# CubePlanner (website prototype)
 
-Builds container loads from the cartons the SmartPallet app measures, and
+Builds container loads from the cartons the CubePlanner iPhone app measures, and
 shows what it would take to fill every container properly.
 
 - **Products** — the library on the left: every carton you have, with a small

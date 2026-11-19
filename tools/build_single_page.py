@@ -15,7 +15,7 @@ three = re.search(r'<script src="(https://cdnjs\.cloudflare\.com[^"]+)"></script
 scripts = re.findall(r'<script src="(js/[^"]+)"></script>', page)
 
 out = [
-    "<title>SmartPallet Container Builder</title>",
+    "<title>CubePlanner</title>",
     '<meta name="claude:viewport-fit-sides" content="cover">',
     f'<link rel="stylesheet" href="{fonts}">',
     "<style>\n" + (root / "styles.css").read_text() + "</style>",

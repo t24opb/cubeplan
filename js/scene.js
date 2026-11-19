@@ -1,5 +1,5 @@
 /*
- SmartPallet Container Builder — the 3D views (three.js).
+ CubePlanner — the 3D views (three.js).
 
  One Viewer draws either a loaded container or a single carton. The
  container is drawn the way the app draws it: steel-blue frame, timber

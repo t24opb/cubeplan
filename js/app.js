@@ -1,10 +1,12 @@
 /*
- SmartPallet Container Builder — the page: state, tables, options and
+ CubePlanner — the page: state, tables, options and
  the wiring between the controls, the optimiser and the 3D views.
 */
 (function () {
   'use strict';
   var P = window.SPPacker, D = window.SPData;
+  // The key keeps the product's first name so plans saved before the
+  // rename are still found.
   var KEY = 'smartpallet.containerBuilder.v1';
   function $(id) { return document.getElementById(id); }
 
@@ -430,7 +432,7 @@
     if (!shown) return '';
     function q(value) { value = String(value); return /[",\n]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value; }
     var name = MODES.filter(function (m) { return m[0] === shownMode; })[0][1];
-    var out = ['SmartPallet Container Builder,' + name + ' plan', '', 'Container,Type,Full %,Loaded m3,Weight kg,Product,SKU,Cartons'];
+    var out = ['CubePlanner,' + name + ' plan', '', 'Container,Type,Full %,Loaded m3,Weight kg,Product,SKU,Cartons'];
     shown.containers.forEach(function (c, i) {
       Object.keys(c.counts).forEach(function (id) {
         var p = product(id) || {};

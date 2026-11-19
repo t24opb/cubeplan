@@ -1,5 +1,5 @@
 /*
- SmartPallet Container Builder — starting data and file import.
+ CubePlanner — starting data and file import.
 
  Container sizes are the same inside dimensions the app uses
  (ContainerCatalog.swift). Payloads are typical figures; they vary by

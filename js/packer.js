@@ -1,5 +1,5 @@
 /*
- SmartPallet Container Builder — packing and optimising.
+ CubePlanner — packing and optimising.
 
  Pure logic, no page or 3D code, so it runs the same in a browser and in
  Node (see tests/packer.test.js).
