@@ -226,9 +226,9 @@
         '<td><input class="cell-input" type="number" min="0" step="1" inputmode="numeric" data-f="qty" id="qty-' + p.id + '" value="' + p.qty + '" aria-label="Cartons of ' + esc(p.name) + ' ordered"></td>' +
         '<td><button type="button" class="lock" data-act="lock" aria-pressed="' + !!p.locked + '" aria-label="Lock the quantity of ' + esc(p.name) + '" title="' + (p.locked ? 'Locked: this quantity will not change' : 'Lock this quantity') + '">' + (p.locked ? LOCK_ICON : UNLOCK_ICON) + '</button></td>' +
         '<td><input class="cell-input narrow" type="number" min="0" max="100" step="1" inputmode="decimal" data-f="maxChange" id="lim-' + p.id + '" placeholder="' + general + '" value="' + (p.maxChange === null || p.maxChange === undefined ? '' : p.maxChange) + '"' + (p.locked ? ' disabled' : '') + ' aria-label="Limit for ' + esc(p.name) + ', per cent"></td>' +
-        '<td class="planned" data-out="planned"></td><td class="change" data-out="change"></td></tr>';
+        '<td class="planned" data-out="planned"></td></tr>';
       if (open) {
-        html += '<tr class="detail" data-id="' + p.id + '"><td colspan="6"><div class="detail-inner">' +
+        html += '<tr class="detail" data-id="' + p.id + '"><td colspan="5"><div class="detail-inner">' +
           '<div id="carton-slot"></div>' +
           '<div class="fields">' +
           field('wide', 'Name', 'name', 'text', p.name) + field('', 'SKU', 'sku', 'text', p.sku) +
@@ -240,7 +240,7 @@
       }
       return html;
     }).join('');
-    $('order-body').innerHTML = rows || '<tr><td colspan="6" style="text-align:left;color:var(--ink-2);padding:18px 14px">No products yet. Add one, import a file from the app, or load the example.</td></tr>';
+    $('order-body').innerHTML = rows || '<tr><td colspan="5" style="text-align:left;color:var(--ink-2);padding:18px 14px">No products yet. Add one, import a file from the app, or load the example.</td></tr>';
     var slot = $('carton-slot');
     if (slot && openId) {
       slot.parentNode.replaceChild(cartonHost, slot);
@@ -265,26 +265,25 @@
     var shown = plan(), lines = {};
     if (shown && shown.lines) shown.lines.forEach(function (line) { lines[line.id] = line; });
     var oversize = result ? result.oversize.map(function (p) { return p.id; }) : [];
+    function changed(by, of) {
+      if (!by) return '';
+      return '<small class="change ' + (by > 0 ? 'up' : 'down') + '">' + (by > 0 ? '+' : '−') + int(Math.abs(by)) +
+        (of ? ' (' + signedPct(by / Math.max(1, of)) + ')' : '') + '</small>';
+    }
     Array.prototype.forEach.call(document.querySelectorAll('#order-body tr.row'), function (row) {
       var id = row.getAttribute('data-id'), p = product(id), line = lines[id];
-      var planned = row.querySelector('[data-out="planned"]'), change = row.querySelector('[data-out="change"]');
+      var planned = row.querySelector('[data-out="planned"]');
       row.classList.toggle('lit', id === litId);
-      change.className = 'change';
-      if (oversize.indexOf(id) >= 0) { planned.textContent = '—'; change.textContent = 'Too big'; change.classList.add('down'); return; }
-      if (!line) { planned.textContent = p && p.qty > 0 ? '—' : '0'; change.textContent = ''; return; }
-      planned.textContent = int(line.planned);
-      if (!line.change) { change.textContent = '—'; return; }
-      change.classList.add(line.change > 0 ? 'up' : 'down');
-      change.innerHTML = (line.change > 0 ? '+' : '−') + int(Math.abs(line.change)) +
-        '<small>' + signedPct(line.change / Math.max(1, line.ordered)) + '</small>';
+      if (oversize.indexOf(id) >= 0) { planned.innerHTML = '—<small class="change down">Too big</small>'; return; }
+      if (!line) { planned.textContent = p && p.qty > 0 ? '—' : '0'; return; }
+      planned.innerHTML = int(line.planned) + changed(line.change, line.ordered);
     });
     var foot = $('order-foot');
     if (!shown || !shown.lines || !state.products.length) { foot.innerHTML = ''; }
     else {
-      var diff = shown.plannedCartons - shown.orderedCartons;
       foot.innerHTML = '<tr><td>' + m3(shown.orderedVolume) + ' m³ ordered · ' + m3(shown.plannedVolume) + ' m³ planned</td>' +
-        '<td>' + int(shown.orderedCartons) + '</td><td></td><td></td><td>' + int(shown.plannedCartons) + '</td>' +
-        '<td class="change ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '') + '">' + (diff ? (diff > 0 ? '+' : '−') + int(Math.abs(diff)) : '—') + '</td></tr>';
+        '<td>' + int(shown.orderedCartons) + '</td><td></td><td></td><td>' + int(shown.plannedCartons) +
+        changed(shown.plannedCartons - shown.orderedCartons, 0) + '</td></tr>';
     }
     var open = openId && product(openId), volume = $('d-vol');
     if (open && volume) {
@@ -294,29 +293,34 @@
   }
 
   // ---------- options and advice ----------
+  /** The three options as one row of switches; the detail of the one on screen goes on a line beneath. */
   function renderOptions() {
     var kpi = state.settings.kpi;
     $('options').innerHTML = MODES.map(function (mode) {
       var key = mode[0], o = result ? result[key] : null;
       if (!o || !o.feasible) {
         var why = !result || !result.asOrdered ? 'Nothing to load yet'
-          : key === 'trim' ? (result.asOrdered.containers.length < 2 ? 'There is only one container' : 'Not possible within your limits')
+          : key === 'trim' ? (result.asOrdered.containers.length < 2 ? 'There is only one container, so nothing to trim' : 'Not possible within your limits')
           : 'Not possible';
-        return '<button type="button" class="option" disabled><span class="option-name">' + mode[1] + '</span><span class="option-count">—</span><span class="option-line">' + why + '</span></button>';
+        return '<button type="button" class="option" disabled title="' + why + '"><span class="state none">–</span><span class="option-text"><span class="option-name">' + mode[1] + '</span><span class="option-count"><small>' + (key === 'trim' ? 'not possible' : 'nothing to load') + '</small></span></span></button>';
       }
-      var diff = o.plannedCartons - o.orderedCartons;
-      var changeLine = diff === 0 && o.productsChanged === 0 ? 'No changes to the order'
-        : '<b>' + (diff > 0 ? '+' : '−') + int(Math.abs(diff)) + ' cartons</b> (' + signedPct(o.changeFraction) + ' by volume)';
-      var tag = key === result.recommended ? '<span class="tag pick">' + (result.anyPass ? 'Suggested' : 'Closest') + '</span>' : '';
-      return '<button type="button" class="option" data-mode="' + key + '" aria-pressed="' + (key === shownMode) + '">' +
-        '<span class="option-name">' + mode[1] + tag + '</span>' +
-        '<span class="option-count">' + o.containers.length + '<small>' + (o.containers.length === 1 ? 'container' : 'containers') + '</small></span>' +
-        '<span class="option-line">Emptiest <b>' + pct(o.minFill) + '</b> full</span>' +
-        '<span class="option-line">' + changeLine + '</span>' +
-        '<span class="pill ' + (o.meetsKpi ? 'good">✓ Every container ' + kpi + '% or more' : 'bad">✕ A container is under ' + kpi + '%') + '</span></button>';
+      var n = o.containers.length;
+      var verdict = o.meetsKpi ? 'Every container is ' + kpi + '% full or more' : 'A container is under ' + kpi + '%';
+      return '<button type="button" class="option" data-mode="' + key + '" aria-pressed="' + (key === shownMode) + '" title="' + verdict + '">' +
+        '<span class="state ' + (o.meetsKpi ? 'good">✓' : 'bad">✕') + '</span>' +
+        '<span class="option-text"><span class="option-name">' + mode[1] + '</span>' +
+        '<span class="option-count">' + n + '<small> ' + (n === 1 ? 'container' : 'containers') + '</small></span></span>' +
+        (key === result.recommended && result.anyPass ? '<span class="tag pick">Suggested</span>' : '') + '</button>';
     }).join('');
+    var shown = plan(), summary = '';
+    if (shown && shown.feasible) {
+      var diff = shown.plannedCartons - shown.orderedCartons;
+      summary = 'Emptiest container ' + pct(shown.minFill) + ' full · ' +
+        (diff === 0 && shown.productsChanged === 0 ? 'no changes to the order'
+          : (diff > 0 ? '+' : '−') + int(Math.abs(diff)) + ' cartons (' + signedPct(shown.changeFraction) + ' by volume)');
+    }
+    $('option-summary').textContent = summary;
   }
-
   var neededTimer, needed = null;
   function renderAdvice() {
     var el = $('advice'), kpi = state.settings.kpi;
@@ -394,16 +398,53 @@
         var p = product(id);
         return '<span><i class="dot" style="background:' + esc(p ? p.colour : '#999') + '"></i>' + esc(p ? p.name : 'Product') + ' ' + int(c.counts[id]) + '</span>';
       }).join('');
+      var facts = [m3(c.volume) + ' of ' + m3(c.capacity) + ' m³'];
+      if (c.weight > 0) facts.push(int(c.weight) + (c.type.payload > 0 ? ' of ' + int(c.type.payload) : '') + ' kg' + (byWeight ? ' (at limit)' : ''));
+      facts.push(plural(c.cartons, 'carton'));
+      if (c.type.cost > 0) facts.push('$' + int(c.type.cost));
+      var picture = thumbs[thumbKey(c)];
       return '<button type="button" class="cont" data-cont="' + i + '" aria-pressed="' + (i === contIndex) + '">' +
+        '<span class="cont-pic" data-thumb="' + i + '">' + (picture ? '<img alt="" src="' + picture + '">' : '') + '</span>' +
         '<span class="cont-head"><span class="cont-name">' + (i + 1) + ' · ' + esc(c.type.code || c.type.name) + '</span>' +
         '<span class="cont-fill ' + (ok ? 'good' : 'bad') + '">' + pct(c.use) + '</span></span>' +
-        '<span class="bar"><span class="bar-fill ' + (ok ? '' : 'bad') + '" style="width:' + Math.min(100, c.use * 100).toFixed(1) + '%"></span><span class="bar-mark" style="left:' + kpi + '%" title="Minimum ' + kpi + '%"></span></span>' +
-        '<dl class="plate"><dt>Loaded</dt><dd>' + m3(c.volume) + ' of ' + m3(c.capacity) + ' m³</dd>' +
-        (c.weight > 0 ? '<dt>Weight</dt><dd>' + int(c.weight) + (c.type.payload > 0 ? ' of ' + int(c.type.payload) : '') + ' kg' + (byWeight ? ' · at limit' : '') + '</dd>' : '') +
-        '<dt>Cartons</dt><dd>' + int(c.cartons) + '</dd>' +
-        (c.type.cost > 0 ? '<dt>Freight</dt><dd>$' + int(c.type.cost) + '</dd>' : '') + '</dl>' +
+        '<span class="bar" title="Minimum ' + kpi + '%"><span class="bar-fill ' + (ok ? '' : 'bad') + '" style="width:' + Math.min(100, c.use * 100).toFixed(1) + '%"></span><span class="bar-mark" style="left:' + kpi + '%"></span></span>' +
+        '<span class="cont-facts">' + facts.join(' · ') + '</span>' +
         '<span class="mix">' + mix + '</span></button>';
     }).join('');
+    drawThumbsSoon();
+  }
+
+  // A small 3D picture of each container for its card. Drawn one at a
+  // time once the page is idle, and kept until the load changes.
+  var thumbs = {}, thumbViewer = null, thumbTimer;
+  function thumbKey(c) {
+    return c.type.id + '|' + state.settings.gap + '|' + c.blocks.map(function (b) {
+      var p = product(b.id);
+      return [p ? p.colour : '', b.x, b.y, b.z, b.a, b.b, b.c, b.nx, b.ny, b.nz, b.tier].join(',');
+    }).join(';');
+  }
+  function drawThumbsSoon() {
+    clearTimeout(thumbTimer);
+    if (!window.SPViewer) return;
+    thumbTimer = setTimeout(function draw() {
+      var shown = plan();
+      if (!shown) return;
+      if (!thumbViewer) thumbViewer = new window.SPViewer(document.createElement('div'), { still: { width: 640, height: 250 } });
+      if (!thumbViewer.ok) return;
+      var colours = {};
+      state.products.forEach(function (p) { colours[p.id] = p.colour; });
+      for (var i = 0; i < shown.containers.length; i++) {
+        var key = thumbKey(shown.containers[i]);
+        if (thumbs[key]) continue;
+        // Keep only what is on screen: old loads are not coming back.
+        if (Object.keys(thumbs).length > 60) thumbs = {};
+        thumbs[key] = thumbViewer.picture(shown.containers[i], colours, state.settings.gap);
+        var slot = document.querySelector('.cont-pic[data-thumb="' + i + '"]');
+        if (slot && thumbs[key]) slot.innerHTML = '<img alt="" src="' + thumbs[key] + '">';
+        thumbTimer = setTimeout(draw, 0);     // the next one, after the page has had a turn
+        return;
+      }
+    }, 220);
   }
 
   function renderStage(keepView) {

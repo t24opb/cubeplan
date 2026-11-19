@@ -56,7 +56,9 @@
     this.ok = false;
     if (!T) { host.classList.add('no-webgl'); return; }
     try {
-      this.renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
+      // A viewer that only makes still pictures keeps what it drew, so
+      // the picture can be read back.
+      this.renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: !!this.options.still });
     } catch (error) {
       host.classList.add('no-webgl');
       return;
@@ -88,9 +90,29 @@
     this.pointers = {};
     this.raycaster = new T.Raycaster();
     this._tick = this._tick.bind(this);
+    if (this.options.still) {
+      // No turning, no mouse: a fixed size, drawn only when asked.
+      this.auto = false;
+      renderer.setPixelRatio(1);
+      renderer.setSize(this.options.still.width, this.options.still.height, false);
+      this.camera.aspect = this.options.still.width / this.options.still.height;
+      this.camera.updateProjectionMatrix();
+      return;
+    }
     this._bind();
     this._resize();
   }
+
+  /** A still picture of a loaded container, as an image address. Only for a viewer made with `still`. */
+  Viewer.prototype.picture = function (container, colours, gap) {
+    if (!this.ok || !this.options.still) return null;
+    this.showContainer(container, colours, gap, false);
+    if (this._frame) { root.cancelAnimationFrame(this._frame); this._frame = 0; }
+    this.view.homeDist *= 0.86; this.view.dist = this.view.homeDist;
+    this.view.target.y = this.size.y * 0.5;
+    this._tick(0);
+    try { return this.renderer.domElement.toDataURL('image/png'); } catch (error) { return null; }
+  };
 
   Viewer.prototype._bind = function () {
     var self = this, el = this.renderer.domElement;
