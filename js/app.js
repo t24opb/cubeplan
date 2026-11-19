@@ -14,7 +14,14 @@
   var LOCK_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.6" fill="currentColor"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
   var UNLOCK_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.3-1.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 
+  /** How the page starts: the example products in the library, nothing on order. */
   function fresh() {
+    var state = exampleState();
+    state.products = [];
+    return state;
+  }
+  /** The example: the same library, with five of its products on order. */
+  function exampleState() {
     var sample = D.sampleState();
     return { library: sample.library, products: sample.products, types: D.defaultContainers(), settings: { kpi: 85, maxChange: 5, gap: 5 }, choice: 'auto', example: true };
   }
@@ -226,9 +233,10 @@
         '<td><input class="cell-input" type="number" min="0" step="1" inputmode="numeric" data-f="qty" id="qty-' + p.id + '" value="' + p.qty + '" aria-label="Cartons of ' + esc(p.name) + ' ordered"></td>' +
         '<td><button type="button" class="lock" data-act="lock" aria-pressed="' + !!p.locked + '" aria-label="Lock the quantity of ' + esc(p.name) + '" title="' + (p.locked ? 'Locked: this quantity will not change' : 'Lock this quantity') + '">' + (p.locked ? LOCK_ICON : UNLOCK_ICON) + '</button></td>' +
         '<td><input class="cell-input narrow" type="number" min="0" max="100" step="1" inputmode="decimal" data-f="maxChange" id="lim-' + p.id + '" placeholder="' + general + '" value="' + (p.maxChange === null || p.maxChange === undefined ? '' : p.maxChange) + '"' + (p.locked ? ' disabled' : '') + ' aria-label="Limit for ' + esc(p.name) + ', per cent"></td>' +
-        '<td class="planned" data-out="planned"></td></tr>';
+        '<td class="planned" data-out="planned"></td>' +
+        '<td class="row-end"><button type="button" class="row-remove" data-act="remove" aria-label="Remove ' + esc(p.name) + ' from the order" title="Remove from the order">−</button></td></tr>';
       if (open) {
-        html += '<tr class="detail" data-id="' + p.id + '"><td colspan="5"><div class="detail-inner">' +
+        html += '<tr class="detail" data-id="' + p.id + '"><td colspan="6"><div class="detail-inner">' +
           '<div id="carton-slot"></div>' +
           '<div class="fields">' +
           field('wide', 'Name', 'name', 'text', p.name) + field('', 'SKU', 'sku', 'text', p.sku) +
@@ -240,7 +248,13 @@
       }
       return html;
     }).join('');
-    $('order-body').innerHTML = rows || '<tr><td colspan="5" style="text-align:left;color:var(--ink-2);padding:18px 14px">No products yet. Add one, import a file from the app, or load the example.</td></tr>';
+    $('order-body').innerHTML = rows || '<tr class="empty"><td colspan="6"><div class="order-empty">' +
+      '<strong>The order is empty</strong>' +
+      '<span>Drag products in from the library on the left, or press + beside one.</span>' +
+      (inBusiness() ? '' : '<button type="button" class="btn solid" data-example="1">Load the example order</button>' +
+        '<span class="hint">Five flat-pack products, to see how it works.</span>') +
+      '</div></td></tr>';
+    document.querySelector('.order-table thead').hidden = !rows;
     var slot = $('carton-slot');
     if (slot && openId) {
       slot.parentNode.replaceChild(cartonHost, slot);
@@ -283,7 +297,7 @@
     else {
       foot.innerHTML = '<tr><td>' + m3(shown.orderedVolume) + ' m³ ordered · ' + m3(shown.plannedVolume) + ' m³ planned</td>' +
         '<td>' + int(shown.orderedCartons) + '</td><td></td><td></td><td>' + int(shown.plannedCartons) +
-        changed(shown.plannedCartons - shown.orderedCartons, 0) + '</td></tr>';
+        changed(shown.plannedCartons - shown.orderedCartons, 0) + '</td><td></td></tr>';
     }
     var open = openId && product(openId), volume = $('d-vol');
     if (open && volume) {
@@ -326,7 +340,7 @@
     var el = $('advice'), kpi = state.settings.kpi;
     el.className = 'advice';
     if (!result || !result.asOrdered) {
-      el.textContent = result && result.oversize.length ? 'None of these cartons fits in the containers you have allowed.' : 'Add products and quantities to build a load.';
+      el.textContent = result && result.oversize.length ? 'None of these cartons fits in the containers you have allowed.' : '';
       return;
     }
     var text = '', a = result.asOrdered, best = result[result.recommended];
@@ -453,7 +467,7 @@
     $('stage-foot').hidden = !container;
     if (!container) {
       empty.hidden = false;
-      empty.textContent = 'The loaded container appears here.';
+      empty.textContent = 'Your containers appear here as you add products to the order.';
       $('stage-title').innerHTML = '';
       if (viewer && viewer.ok) { viewer._clear(); viewer.size = null; viewer.invalidate(); }
       return;
@@ -845,7 +859,7 @@
         state.products.splice(index, 1);
         openId = null; edited();
         renderOrder(); recalc();
-        toast(removed.name + ' removed.', 'Undo', function () { state.products.splice(index, 0, removed); renderOrder(); recalc(); });
+        toast(removed.name + ' removed from the order.', 'Undo', function () { state.products.splice(index, 0, removed); renderOrder(); recalc(); });
         return;
       }
       if (row.classList.contains('detail')) return;
@@ -909,14 +923,19 @@
       var name = $('d-name');
       if (name) { name.focus(); name.select(); }
     });
-    $('btn-sample').addEventListener('click', function () {
+    function loadExample() {
+      if (inBusiness()) return;
       var before = JSON.stringify(state);
-      state = fresh(); openId = null; litId = null; contIndex = 0; needed = null;
+      state = exampleState(); openId = null; litId = null; contIndex = 0; needed = null;
       renderRules(); renderTypes(); renderOrder(); recalc();
       toast('Example order loaded.', 'Undo', function () {
         state = JSON.parse(before); openId = null; litId = null; contIndex = 0;
         renderRules(); renderTypes(); renderOrder(); recalc();
       });
+    }
+    $('btn-sample').addEventListener('click', loadExample);
+    body.addEventListener('click', function (e) {
+      if (e.target.closest('[data-example]')) loadExample();
     });
     $('lbl-import').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file-import').click(); }
@@ -1006,10 +1025,10 @@
       var card = e.target.closest ? e.target.closest('.lib-item') : null;
       if (card) card.classList.remove('dragging');
       document.body.classList.remove('dragging-product');
-      $('stage').classList.remove('drop-over');
+      document.querySelector('.order').classList.remove('drop-over');
       dragging = null;
     });
-    [$('stage'), document.querySelector('.order')].forEach(function (target) {
+    [document.querySelector('.order')].forEach(function (target) {
       target.addEventListener('dragover', function (e) {
         if (!dragging) return;
         e.preventDefault();

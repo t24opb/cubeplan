@@ -85,11 +85,36 @@
         <h2>Products</h2>
         <span class="hint" id="lib-count"></span>
       </div>
-      <p class="hint lib-hint">Drag a product onto the container to add it to the load, or press +.</p>
+      <p class="hint lib-hint">Drag a product into the order, or press +.</p>
       <div class="lib-list" id="lib-list"></div>
     </section>
 
-    <section class="panel plan" aria-label="Load plan">
+    <section class="panel order" aria-label="Order">
+      <div class="order-drop" aria-hidden="true"><span>Drop to add it to the order</span></div>
+      <div class="panel-head">
+        <h2>Order</h2>
+        <button type="button" class="btn quiet small" id="btn-add">Add a product</button>
+      </div>
+      <div class="scroll-x">
+        <table class="table order-table">
+          <thead>
+            <tr>
+              <th class="left">Product</th>
+              <th>Ordered</th>
+              <th title="A locked product's quantity is never changed">Lock</th>
+              <th title="This product's own limit. Blank uses the general limit above.">Limit ±%</th>
+              <th title="What the option on screen plans, and how that differs from what was ordered">Planned</th>
+              <th><span class="sr-only">Remove</span></th>
+            </tr>
+          </thead>
+          <tbody id="order-body"></tbody>
+          <tfoot id="order-foot"></tfoot>
+        </table>
+      </div>
+      <p class="hint order-hint" id="order-hint">Quantities are cartons. Select a product to see its carton and change its size. Removing one here keeps it in the library.</p>
+    </section>
+
+    <section class="panel plan" aria-label="Containers">
       <div class="options" id="options"></div>
       <p class="option-summary" id="option-summary"></p>
       <p class="advice" id="advice"></p>
@@ -105,7 +130,6 @@
           </div>
         </div>
         <div class="stage-empty" id="stage-empty" hidden></div>
-        <div class="stage-drop" aria-hidden="true"><span>Drop to add it to the load</span></div>
         <div class="stage-tip" id="stage-tip" hidden></div>
         <div class="stage-foot" id="stage-foot">
           <label for="in-seq">Loading order</label>
@@ -116,29 +140,6 @@
       </div>
 
       <div class="containers" id="containers"></div>
-    </section>
-
-    <section class="panel order" aria-label="Order">
-      <div class="panel-head">
-        <h2>Order</h2>
-        <button type="button" class="btn quiet small" id="btn-add">Add a product</button>
-      </div>
-      <div class="scroll-x">
-        <table class="table order-table">
-          <thead>
-            <tr>
-              <th class="left">Product</th>
-              <th>Ordered</th>
-              <th title="A locked product's quantity is never changed">Lock</th>
-              <th title="This product's own limit. Blank uses the general limit above.">Limit ±%</th>
-              <th title="What the option on screen plans, and how that differs from what was ordered">Planned</th>
-            </tr>
-          </thead>
-          <tbody id="order-body"></tbody>
-          <tfoot id="order-foot"></tfoot>
-        </table>
-      </div>
-      <p class="hint order-hint" id="order-hint">Select a product to see its carton and change its size. Quantities are cartons. Removing a product here keeps it in the library.</p>
     </section>
   </div>
 

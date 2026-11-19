@@ -4,7 +4,7 @@ Builds container loads from the cartons the CubePlanner iPhone app measures, and
 shows what it would take to fill every container properly.
 
 - **Products** — the library on the left: every carton you have, with a small
-  drawing of it. Drag one onto the container (or press +) and the page offers
+  drawing of it. Drag one into the order (or press +) and the page offers
   the number of cartons that fit in the space left.
 - **Order** — the products in this load, with carton size, weight and quantity. Import the app's
   "Export all products as JSON" file (Settings → Business API), or a CSV with

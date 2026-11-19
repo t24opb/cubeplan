@@ -1,4 +1,4 @@
-/* Layout: a rules band across the top, then three columns: the product library, the load plan (options, 3D stage, containers) and the order table. Narrower, the library becomes a strip above the other two; on a phone everything is one column. */
+/* Layout: a rules band across the top, then three columns in the order the work is done: the product library, the order you drag products into, and the containers that result (options, 3D stage, a card per container). Narrower, the library becomes a strip above the other two; on a phone everything is one column. */
 :root {
   --bg: #edf0f4;
   --surface: #ffffff;
@@ -124,7 +124,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* Panels and grid */
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
-.grid { display: grid; grid-template-columns: 252px minmax(0, 7fr) minmax(0, 5fr); gap: 14px; align-items: start; }
+.grid { display: grid; grid-template-columns: 252px minmax(0, 5fr) minmax(0, 6fr); gap: 14px; align-items: start; }
 
 /* Product library */
 .library { padding: 14px 0 10px; }
@@ -154,15 +154,26 @@ button, input, textarea { font: inherit; color: inherit; }
 .lib-btn.remove:hover { color: var(--bad); border-color: var(--bad); }
 .lib-empty { padding: 6px 8px 10px; color: var(--ink-2); font-size: 13px; }
 
-/* Where a dragged product can be dropped */
-.stage-drop {
-  display: none; position: absolute; inset: 6px; z-index: 4; pointer-events: none;
-  border: 2px dashed var(--accent); border-radius: 8px; align-items: flex-end; justify-content: center; padding-bottom: 64px;
+/* The order is where a dragged product is dropped */
+.order { position: relative; }
+.order-drop {
+  display: none; position: absolute; inset: 5px; z-index: 4; pointer-events: none;
+  border: 2px dashed var(--accent); border-radius: 8px; align-items: flex-end; justify-content: center; padding-bottom: 18px;
 }
-.stage-drop span { padding: 6px 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 13px; }
-body.dragging-product .stage-drop { display: flex; }
-body.dragging-product .stage.drop-over .stage-drop { background: var(--accent-soft); opacity: 0.9; }
-body.dragging-product .order { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.order-drop span { padding: 6px 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 13px; }
+body.dragging-product .order-drop { display: flex; }
+body.dragging-product .order.drop-over .order-drop { background: var(--accent-soft); opacity: 0.85; }
+.order-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 34px 18px 30px; text-align: center; color: var(--ink-2); }
+.order-empty strong { font: 600 17px/1.2 var(--display); color: var(--ink); }
+.order-empty .btn { margin-top: 8px; min-height: 40px; padding: 0 18px; }
+.order-table tr.empty td { border-bottom: 0; }
+.row-end { width: 1%; padding-left: 2px !important; }
+.row-remove {
+  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+  font: 700 16px/1 var(--body); cursor: pointer; padding: 0 0 2px; display: inline-flex; align-items: center; justify-content: center;
+}
+.row-remove:hover { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .sheet-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .sheet-card .field.wide-field { max-width: none; }
 .sheet-card .field input[type="email"], .sheet-card .field input[type="text"], .sheet-card .field select {
@@ -372,7 +383,7 @@ body.dragging-product .order { outline: 2px dashed var(--accent); outline-offset
 .sheet-card .btn { align-self: flex-end; }
 
 @media (max-width: 1439px) {
-  .grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+  .grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
   .library { grid-column: 1 / -1; }
   .lib-list { flex-direction: row; max-height: none; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; }
   .lib-item { flex: none; width: 236px; }
