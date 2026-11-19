@@ -195,5 +195,15 @@ test('room for a product: an empty order fills one container; a huge carton is r
   assert.strictEqual(P.roomFor([], all, settings, mast).tooBig, true);
 });
 
+test('a row is one wall of the product: across the container times up to the roof', () => {
+  const upright = D.product({ name: 'A', l: 60, w: 40, h: 30, tippable: false }, 0);
+  // 40 ft high cube with a 5 cm gap: 230.2 across, 264.8 high → 5 across (40s) × 8 high.
+  assert.strictEqual(P.rowSize(upright, types('40HC'), settings), 40);
+  // A standard-height container takes one layer fewer.
+  assert.strictEqual(P.rowSize(upright, types('40GP'), settings), 35);
+  // Never less than one, even for a carton that fits nothing.
+  assert.strictEqual(P.rowSize(D.product({ name: 'Mast', l: 1300, w: 300, h: 300 }, 1), types('40HC'), settings), 1);
+});
+
 console.log(failures ? failures + ' failed' : 'all passed');
 process.exit(failures ? 1 : 0);

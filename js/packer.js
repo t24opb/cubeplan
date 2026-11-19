@@ -462,6 +462,23 @@
     return { count: count, opensNew: opensNew, containers: planned, tooBig: false };
   }
 
+  /**
+   How many cartons of a product make one row: wall to wall and floor to
+   roof, one carton deep, in the roomiest container allowed. This is the
+   "Row" step for changing quantities, as in the iPhone app.
+  */
+  function rowSize(product, types, settings) {
+    var gap = settings.gap || 0, best = 0;
+    types.filter(function (t) { return t.enabled !== false && t.length > 0 && t.width > 0 && t.height > 0; }).forEach(function (t) {
+      orientations(product).forEach(function (o) {
+        if (o[0] > t.length - gap + EPS) return;
+        var across = Math.floor((t.width - gap + EPS) / o[1]), high = Math.floor((t.height - gap + EPS) / o[2]);
+        best = Math.max(best, across * high);
+      });
+    });
+    return Math.max(1, best);
+  }
+
   /** Every carton of a container, in loading order, for drawing. */
   function cartons(container) {
     var out = [];
@@ -480,7 +497,7 @@
 
   var api = {
     orientations: orientations, bounds: bounds, plan: plan, optimise: optimise,
-    changeNeeded: changeNeeded, cartons: cartons, typeVolume: typeVolume, roomFor: roomFor,
+    changeNeeded: changeNeeded, cartons: cartons, typeVolume: typeVolume, roomFor: roomFor, rowSize: rowSize,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SPPacker = api;

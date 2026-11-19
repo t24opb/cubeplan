@@ -95,6 +95,15 @@
         <h2>Order</h2>
         <button type="button" class="btn quiet small" id="btn-add">Add a product</button>
       </div>
+      <div class="step-bar" id="step-bar" hidden>
+        <span id="step-label">− and + change by</span>
+        <span class="steps" role="group" aria-labelledby="step-label">
+          <button type="button" class="step" data-step="10">10</button>
+          <button type="button" class="step" data-step="100">100</button>
+          <button type="button" class="step" data-step="1000">1,000</button>
+          <button type="button" class="step" data-step="row" title="One row of that product: wall to wall and floor to roof, one carton deep">Row</button>
+        </span>
+      </div>
       <div class="scroll-x">
         <table class="table order-table">
           <thead>

@@ -223,6 +223,12 @@
   }
 
   // ---------- order table ----------
+  /** How many cartons − and + move a product by: 10, 100, 1,000, or one row of it. */
+  function stepFor(p) {
+    var step = state.settings.step || 100;
+    return step === 'row' ? P.rowSize(p, state.types, state.settings) : +step;
+  }
+
   function renderOrder() {
     var general = state.settings.maxChange;
     var rows = state.products.map(function (p) {
@@ -230,7 +236,9 @@
       var html = '<tr class="row' + (open ? ' open' : '') + (p.id === litId ? ' lit' : '') + '" data-id="' + p.id + '">' +
         '<td><button type="button" class="prod" data-act="open" aria-expanded="' + open + '"><i class="dot" style="background:' + esc(p.colour) + '"></i>' +
         '<span><span class="prod-name">' + esc(p.name) + '</span><span class="prod-size">' + esc(sizeText(p)) + '</span></span></button></td>' +
-        '<td><input class="cell-input" type="number" min="0" step="1" inputmode="numeric" data-f="qty" id="qty-' + p.id + '" value="' + p.qty + '" aria-label="Cartons of ' + esc(p.name) + ' ordered"></td>' +
+        '<td><span class="qty"><button type="button" class="nudge" data-nudge="-1" aria-label="' + int(stepFor(p)) + ' fewer cartons of ' + esc(p.name) + '" title="−' + int(stepFor(p)) + '">−</button>' +
+        '<input class="cell-input" type="number" min="0" step="1" inputmode="numeric" data-f="qty" id="qty-' + p.id + '" value="' + p.qty + '" aria-label="Cartons of ' + esc(p.name) + ' ordered">' +
+        '<button type="button" class="nudge" data-nudge="1" aria-label="' + int(stepFor(p)) + ' more cartons of ' + esc(p.name) + '" title="+' + int(stepFor(p)) + '">+</button></span></td>' +
         '<td><button type="button" class="lock" data-act="lock" aria-pressed="' + !!p.locked + '" aria-label="Lock the quantity of ' + esc(p.name) + '" title="' + (p.locked ? 'Locked: this quantity will not change' : 'Lock this quantity') + '">' + (p.locked ? LOCK_ICON : UNLOCK_ICON) + '</button></td>' +
         '<td><input class="cell-input narrow" type="number" min="0" max="100" step="1" inputmode="decimal" data-f="maxChange" id="lim-' + p.id + '" placeholder="' + general + '" value="' + (p.maxChange === null || p.maxChange === undefined ? '' : p.maxChange) + '"' + (p.locked ? ' disabled' : '') + ' aria-label="Limit for ' + esc(p.name) + ', per cent"></td>' +
         '<td class="planned" data-out="planned"></td>' +
@@ -255,6 +263,10 @@
         '<span class="hint">Five flat-pack products, to see how it works.</span>') +
       '</div></td></tr>';
     document.querySelector('.order-table thead').hidden = !rows;
+    $('step-bar').hidden = !rows;
+    Array.prototype.forEach.call(document.querySelectorAll('#step-bar .step'), function (button) {
+      button.setAttribute('aria-pressed', String(button.getAttribute('data-step') === String(state.settings.step || 100)));
+    });
     var slot = $('carton-slot');
     if (slot && openId) {
       slot.parentNode.replaceChild(cartonHost, slot);
@@ -895,7 +907,7 @@
         return;
       }
       if (row.classList.contains('detail')) return;
-      if (e.target.closest('input')) return;
+      if (e.target.closest('input') || e.target.closest('.nudge')) return;
       openId = openId === id ? null : id;
       litId = openId;
       renderOrder();
@@ -924,6 +936,46 @@
       if ((f === 'l' || f === 'w' || f === 'h') && e.type === 'change' && cartonViewer && cartonViewer.ok && p.id === openId) cartonViewer.showCarton(p);
       recalcSoon();
     }
+    // − and + beside a quantity: one step per press, repeating while held.
+    function nudge(button) {
+      var row = button.closest('tr[data-id]'), p = row && product(row.getAttribute('data-id'));
+      if (!p) return;
+      p.qty = Math.max(0, p.qty + (+button.getAttribute('data-nudge')) * stepFor(p));
+      row.querySelector('[data-f="qty"]').value = p.qty;
+      edited();
+      recalcSoon();
+    }
+    var holdTimer = null, holdRepeat = null;
+    function stopHold() { clearTimeout(holdTimer); clearInterval(holdRepeat); holdTimer = holdRepeat = null; }
+    body.addEventListener('pointerdown', function (e) {
+      var button = e.target.closest('.nudge');
+      if (!button) return;
+      e.preventDefault();
+      nudge(button);
+      stopHold();
+      holdTimer = setTimeout(function () {
+        holdRepeat = setInterval(function () {
+          if (!document.body.contains(button)) { stopHold(); return; }
+          nudge(button);
+        }, 110);
+      }, 420);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (name) { body.addEventListener(name, stopHold, true); });
+    window.addEventListener('blur', stopHold);
+    body.addEventListener('click', function (e) {
+      // From the keyboard there is no press-and-hold: one step per key press.
+      var button = e.target.closest('.nudge');
+      if (button && e.detail === 0) nudge(button);
+    });
+    $('step-bar').addEventListener('click', function (e) {
+      var button = e.target.closest('.step');
+      if (!button) return;
+      var value = button.getAttribute('data-step');
+      state.settings.step = value === 'row' ? 'row' : +value;
+      renderOrder();
+      save();
+    });
+
     body.addEventListener('input', function (e) {
       var f = e.target.getAttribute('data-f');
       if (f === 'qty' || f === 'maxChange') fieldChanged(e);
