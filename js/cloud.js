@@ -108,6 +108,16 @@
     }));
   };
 
+  /** Signs in with a password the user has set. */
+  Cloud.signIn = async function (email, password) {
+    unwrap(await client.auth.signInWithPassword({ email: email, password: password }));
+  };
+
+  /** Sets (or changes) the signed-in user's password. */
+  Cloud.setPassword = async function (password) {
+    unwrap(await client.auth.updateUser({ password: password }));
+  };
+
   Cloud.signOut = async function () {
     unwrap(await client.auth.signOut());
   };

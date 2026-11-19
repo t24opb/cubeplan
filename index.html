@@ -31,7 +31,7 @@
       <button type="button" class="btn quiet" id="btn-sample">Load example</button>
       <label class="btn quiet" for="file-import" tabindex="0" id="lbl-import">Import products</label>
       <input type="file" id="file-import" accept=".json,.csv,.txt,application/json,text/csv" hidden>
-      <button type="button" class="btn solid" id="btn-copy">Copy plan</button>
+      <button type="button" class="btn solid" id="btn-copy" title="Copies the plan for the container on screen, ready to paste into an email">Copy plan</button>
     </div>
   </div>
 </header>
@@ -160,16 +160,20 @@
 <div class="sheet" id="signin-sheet" hidden>
   <form class="sheet-card" id="signin-form">
     <h2>Sign in</h2>
-    <p class="hint">Enter your work email and we'll send you a link that signs you in. There is no password.</p>
     <div class="field wide-field">
       <label for="signin-email">Email</label>
-      <input type="email" id="signin-email" autocomplete="email" required>
+      <input type="email" id="signin-email" autocomplete="username" required>
+    </div>
+    <div class="field wide-field">
+      <label for="signin-password">Password</label>
+      <input type="password" id="signin-password" autocomplete="current-password">
     </div>
     <p class="sheet-note" id="signin-note" hidden></p>
     <div class="sheet-actions">
       <button type="button" class="btn quiet" id="signin-cancel">Close</button>
-      <button type="submit" class="btn solid" id="signin-send">Email me a sign-in link</button>
+      <button type="submit" class="btn solid" id="signin-go">Sign in</button>
     </div>
+    <p class="hint">First time here, or forgotten your password? <button type="button" class="link" id="signin-send">Email me a sign-in link</button> and set a password once you are in, from your business menu.</p>
   </form>
 </div>
 <div class="sheet" id="business-sheet" hidden>
@@ -206,6 +210,14 @@
         <select id="invite-role"><option value="member">Member</option><option value="admin">Admin</option></select>
       </div>
       <button type="submit" class="btn quiet">Invite</button>
+    </form>
+    <form class="invite" id="password-form">
+      <div class="field wide-field">
+        <label for="new-password">Your password, to sign in without an emailed link</label>
+        <input type="password" id="new-password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required>
+      </div>
+      <span></span>
+      <button type="submit" class="btn quiet">Save password</button>
     </form>
     <p class="sheet-note" id="team-note" hidden></p>
     <div class="sheet-actions">

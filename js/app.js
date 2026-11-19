@@ -662,6 +662,7 @@
       if (what === 'signin') {
         note('signin-note', '');
         $('signin-send').disabled = false;
+        $('signin-go').disabled = false;
         $('signin-sheet').hidden = false;
         $('signin-email').focus();
       } else if (what === 'signout') {
@@ -676,8 +677,24 @@
     });
     $('signin-form').addEventListener('submit', function (e) {
       e.preventDefault();
-      var email = $('signin-email').value.trim();
+      var email = $('signin-email').value.trim(), password = $('signin-password').value;
       if (!email) return;
+      if (!password) { note('signin-note', 'Enter your password, or use the emailed link below.', true); return; }
+      $('signin-go').disabled = true;
+      note('signin-note', 'Signing in…');
+      Cloud.signIn(email, password).then(function () {
+        $('signin-password').value = '';
+        $('signin-go').disabled = false;
+      }).catch(function (error) {
+        $('signin-go').disabled = false;
+        note('signin-note', /invalid login/i.test(error.message)
+          ? 'That email and password do not match. If you have not set a password yet, use the emailed link below.'
+          : 'Sign-in failed: ' + error.message, true);
+      });
+    });
+    $('signin-send').addEventListener('click', function () {
+      var email = $('signin-email').value.trim();
+      if (!email) { note('signin-note', 'Enter your email first.', true); $('signin-email').focus(); return; }
       $('signin-send').disabled = true;
       note('signin-note', 'Sending…');
       Cloud.sendLink(email).then(function () {
@@ -686,6 +703,15 @@
         $('signin-send').disabled = false;
         note('signin-note', 'The link could not be sent: ' + error.message, true);
       });
+    });
+    $('password-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var password = $('new-password').value;
+      if (password.length < 8) { note('team-note', 'Use at least 8 characters.', true); return; }
+      Cloud.setPassword(password).then(function () {
+        $('new-password').value = '';
+        note('team-note', 'Password saved. Next time, sign in with ' + Cloud.user.email + ' and this password, here or in the iPhone app.');
+      }).catch(function (error) { note('team-note', 'The password could not be saved: ' + error.message, true); });
     });
     $('signin-cancel').addEventListener('click', function () { $('signin-sheet').hidden = true; });
     $('business-form').addEventListener('submit', function (e) {
@@ -737,23 +763,29 @@
   }
 
   // ---------- copy ----------
+  /** The container on screen as a short note anyone can read: what it is, how full, and what goes in it. */
   function planText() {
-    var shown = plan();
-    if (!shown) return '';
-    function q(value) { value = String(value); return /[",\n]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value; }
-    var name = MODES.filter(function (m) { return m[0] === shownMode; })[0][1];
-    var out = ['CubePlanner,' + name + ' plan', '', 'Container,Type,Full %,Loaded m3,Weight kg,Product,SKU,Cartons'];
-    shown.containers.forEach(function (c, i) {
-      Object.keys(c.counts).forEach(function (id) {
-        var p = product(id) || {};
-        out.push([i + 1, q(c.type.name), (c.use * 100).toFixed(1), m3(c.volume), Math.round(c.weight), q(p.name || ''), q(p.sku || ''), c.counts[id]].join(','));
+    var shown = plan(), c = shown && shown.containers[contIndex];
+    if (!c) return '';
+    var today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+    var out = [
+      'CubePlanner load plan · ' + today,
+      'Container ' + (contIndex + 1) + ' of ' + shown.containers.length + ': ' + c.type.name,
+      '',
+      pct(c.use) + ' full · ' + m3(c.volume) + ' of ' + m3(c.capacity) + ' m³' +
+        (c.weight > 0 ? ' · ' + int(c.weight) + ' kg' + (c.type.payload > 0 ? ' of ' + int(c.type.payload) + ' kg' : '') : '') +
+        ' · ' + plural(c.cartons, 'carton'),
+      '',
+      'Load:',
+    ];
+    Object.keys(c.counts).map(function (id) { return { p: product(id) || {}, n: c.counts[id] }; })
+      .sort(function (a, b) { return b.n - a.n; })
+      .forEach(function (row) {
+        var p = row.p;
+        out.push('  ' + int(row.n) + ' × ' + (p.name || 'Product') + (p.sku ? ' (' + p.sku + ')' : '') +
+          (p.l ? ' — ' + num(p.l) + ' × ' + num(p.w) + ' × ' + num(p.h) + ' cm' : '') +
+          (p.weight > 0 ? ', ' + int(row.n * p.weight) + ' kg' : ''));
       });
-    });
-    out.push('', 'Product,SKU,Length cm,Width cm,Height cm,Ordered,Planned,Change');
-    shown.lines.forEach(function (line) {
-      var p = product(line.id) || {};
-      out.push([q(p.name || ''), q(p.sku || ''), p.l, p.w, p.h, line.ordered, line.planned, line.change].join(','));
-    });
     return out.join('\n');
   }
   function copyPlan() {
@@ -765,7 +797,7 @@
       $('copy-text').focus(); $('copy-text').select();
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { toast('Plan copied. Paste it into a spreadsheet or an email.'); }, fallback);
+      navigator.clipboard.writeText(text).then(function () { toast('Container ' + (contIndex + 1) + ' copied. Paste it into an email or a message.'); }, fallback);
     } else fallback();
   }
 

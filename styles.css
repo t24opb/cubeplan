@@ -176,7 +176,7 @@ body.dragging-product .order.drop-over .order-drop { background: var(--accent-so
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .sheet-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .sheet-card .field.wide-field { max-width: none; }
-.sheet-card .field input[type="email"], .sheet-card .field input[type="text"], .sheet-card .field select {
+.sheet-card .field input[type="email"], .sheet-card .field input[type="password"], .sheet-card .field input[type="text"], .sheet-card .field select {
   width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: inherit; color: inherit;
 }
 .pay-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
