@@ -28,7 +28,9 @@
   // Business accounts. Signed in to a business, the library is that
   // business's shared products; otherwise the page works on its own.
   var Cloud = window.SPCloud || { available: false };
-  function inBusiness() { return !!(Cloud.available && Cloud.user && Cloud.business); }
+  function inBusiness() { return !!(Cloud.available && Cloud.user && Cloud.business && Cloud.paid()); }
+  /** Signed in to a business that has not subscribed: the example only. */
+  function needsToPay() { return !!(Cloud.available && Cloud.user && Cloud.business && !Cloud.paid()); }
   function businessKey(id) { return 'cubeplanner.business.' + id + '.v1'; }
   function storageKey() { return inBusiness() ? businessKey(Cloud.business.id) : KEY; }
   function blank() {
@@ -468,6 +470,7 @@
       el.innerHTML = '<button type="button" class="btn quiet" data-account="signin">Sign in</button>';
     } else if (Cloud.business) {
       el.innerHTML = '<button type="button" class="btn quiet" data-account="team" title="' + esc(Cloud.user.email) + '"><span class="who">' + esc(Cloud.business.name) + '</span></button>' +
+        (needsToPay() ? '<button type="button" class="btn solid" data-account="pay">Subscribe</button>' : '') +
         '<button type="button" class="btn quiet" data-account="signout">Sign out</button>';
     } else {
       el.innerHTML = '<button type="button" class="btn quiet" data-account="signout">Sign out</button>';
@@ -506,6 +509,9 @@
       $('business-note').hidden = true;
     }
     $('business-sheet').hidden = !needsBusiness;
+    // Signed in but not subscribed: say so once, over the example.
+    if (needsToPay() && !payShown) { payShown = true; openPay(); }
+    if (!needsToPay()) $('pay-sheet').hidden = true;
     var next = inBusiness() ? Cloud.business.id : null;
     if (next === showing) return;
     // Put away what is on screen under its own key before swapping.
@@ -522,6 +528,36 @@
     Cloud.products().then(function (items) {
       if (showing === next) applyLibrary(items);
     }).catch(function (error) { toast('Your business\'s products could not be loaded: ' + error.message + '.'); });
+  }
+
+  var payShown = false;
+  function openPay() {
+    var admin = Cloud.isAdmin();
+    var price = (window.CUBEPLANNER_CONFIG && window.CUBEPLANNER_CONFIG.planText) || '';
+    $('pay-title').textContent = 'Subscribe to use CubePlanner for ' + Cloud.business.name;
+    $('pay-text').textContent = (Cloud.business.plan === 'canceled'
+      ? 'This business\'s subscription has ended. '
+      : 'You are signed in, and the example is free to explore. ') +
+      'Planning loads with your own products needs a subscription' + (price ? ': ' + price + '.' : '.') +
+      (admin ? '' : ' Ask an admin of ' + Cloud.business.name + ' to subscribe; this screen will open up for you as soon as they do.');
+    $('pay-go').hidden = !admin;
+    $('pay-go').disabled = false;
+    note('pay-note', '');
+    $('pay-sheet').hidden = false;
+  }
+
+  /** Back from Stripe: the plan is recorded a moment later, so look a few times. */
+  function awaitPlan() {
+    var tries = 0;
+    toast('Thank you. Switching your business on…');
+    (function look() {
+      tries++;
+      Cloud.recheck().then(function () {
+        if (Cloud.business && Cloud.paid()) { toast(Cloud.business.name + ' is subscribed. Your products are ready.'); return; }
+        if (tries < 12) setTimeout(look, 2500);
+        else toast('The payment went through but has not shown up here yet. Reload the page in a minute.');
+      }).catch(function () { if (tries < 12) setTimeout(look, 2500); });
+    })();
   }
 
   function note(id, message, bad) {
@@ -543,6 +579,7 @@
         return '<option value="' + esc(b.id) + '"' + (b.id === Cloud.business.id ? ' selected' : '') + '>' + esc(b.name) + '</option>';
       }).join('');
     }
+    $('team-billing').hidden = !(Cloud.isAdmin() && Cloud.business.billed);
     $('team-list').innerHTML = '<div class="team-row"><span class="role">Loading…</span></div>';
     var business = Cloud.business.id;
     Cloud.team().then(function (team) {
@@ -574,6 +611,8 @@
         $('signin-email').focus();
       } else if (what === 'signout') {
         Cloud.signOut().catch(cloudFailed);
+      } else if (what === 'pay') {
+        openPay();
       } else {
         note('team-note', '');
         $('team-sheet').hidden = false;
@@ -603,6 +642,19 @@
     });
     $('business-signout').addEventListener('click', function () { Cloud.signOut().catch(cloudFailed); });
     $('team-close').addEventListener('click', function () { $('team-sheet').hidden = true; });
+    $('pay-later').addEventListener('click', function () { $('pay-sheet').hidden = true; });
+    $('pay-go').addEventListener('click', function () {
+      $('pay-go').disabled = true;
+      note('pay-note', 'Opening the secure payment page…');
+      Cloud.billing('checkout').then(function (url) { window.location.href = url; }).catch(function (error) {
+        $('pay-go').disabled = false;
+        note('pay-note', error.message, true);
+      });
+    });
+    $('team-billing').addEventListener('click', function () {
+      note('team-note', 'Opening your subscription…');
+      Cloud.billing('portal').then(function (url) { window.location.href = url; }).catch(function (error) { note('team-note', error.message, true); });
+    });
     $('team-switch').addEventListener('change', function () { Cloud.choose(this.value); renderTeam(); });
     $('invite-form').addEventListener('submit', function (e) {
       e.preventDefault();
@@ -993,6 +1045,11 @@
       $('account').hidden = false;
       renderAccount();
       Cloud.start(onCloudChange);
+      // Returning from Stripe's payment page.
+      if (/[?&]billing=done/.test(window.location.search)) {
+        try { window.history.replaceState(null, '', window.location.pathname); } catch (ignore) { /* address stays as it is */ }
+        setTimeout(awaitPlan, 1500);
+      }
     }
     // Sprite labels are drawn with the display font; redraw once it has loaded.
     if (document.fonts && document.fonts.ready) {

@@ -65,9 +65,13 @@
     if (Cloud.user) {
       // Join any business that has invited this email address.
       try { unwrap(await client.rpc('accept_invitations')); } catch (ignore) { /* nothing to accept */ }
-      var rows = unwrap(await client.from('members').select('role, business:businesses(id, name)').eq('user_id', Cloud.user.id));
+      // With the paywall installed (supabase/billing.sql) each business
+      // carries its plan; before that the columns do not exist yet.
+      var answer = await client.from('members').select('role, business:businesses(id, name, plan_status, stripe_customer_id)').eq('user_id', Cloud.user.id);
+      if (answer.error) answer = await client.from('members').select('role, business:businesses(id, name)').eq('user_id', Cloud.user.id);
+      var rows = unwrap(answer);
       Cloud.businesses = rows.filter(function (r) { return r.business; }).map(function (r) {
-        return { id: r.business.id, name: r.business.name, role: r.role };
+        return { id: r.business.id, name: r.business.name, role: r.role, plan: r.business.plan_status, billed: !!r.business.stripe_customer_id };
       }).sort(function (a, b) { return a.name.localeCompare(b.name); });
       var wanted = null;
       try { wanted = root.localStorage.getItem(CHOICE); } catch (ignore) { /* storage is off */ }
@@ -125,6 +129,39 @@
   };
 
   Cloud.isAdmin = function () { return !!(Cloud.business && Cloud.business.role === 'admin'); };
+
+  /** The business may use its own products: it has a paid plan, or there is no paywall yet. */
+  Cloud.paid = function () {
+    var business = Cloud.business;
+    if (!business) return false;
+    return business.plan === undefined || business.plan === 'active' || business.plan === 'past_due' || business.plan === 'comped';
+  };
+
+  /** Looks again at who is signed in and what their business's plan is. */
+  Cloud.recheck = async function () {
+    await refresh();
+    listener();
+  };
+
+  /**
+   Asks the server for a Stripe page: 'checkout' to subscribe, 'portal'
+   to manage the subscription. Returns the address to send the user to.
+  */
+  Cloud.billing = async function (action) {
+    var result = await client.functions.invoke('billing', {
+      body: { action: action, business: Cloud.business.id, returnTo: root.location.origin + root.location.pathname },
+    });
+    if (result.error) {
+      var message = result.error.message || 'The payment page could not be opened.';
+      try {
+        var detail = await result.error.context.json();
+        if (detail && detail.error) message = detail.error;
+      } catch (ignore) { /* no detail given */ }
+      throw new Error(message);
+    }
+    if (!result.data || !result.data.url) throw new Error('The payment page could not be opened.');
+    return result.data.url;
+  };
 
   // ---- products ----
   Cloud.products = async function () {
