@@ -51,6 +51,8 @@
       locked: !!fields.locked,
       maxChange: (fields.maxChange === undefined || fields.maxChange === null || fields.maxChange === '') ? null : +fields.maxChange,
       tippable: fields.tippable === undefined ? false : !!fields.tippable,
+      // The most weight (kg) one carton can take on top; null = no limit of its own.
+      topLoad: (fields.topLoad === undefined || fields.topLoad === null || fields.topLoad === '' || !(+fields.topLoad >= 0)) ? null : +fields.topLoad,
       colour: fields.colour || COLOURS[index % COLOURS.length],
     };
   }
@@ -120,6 +122,7 @@
           w: p.widthCm !== undefined ? p.widthCm : p.width,
           h: p.heightCm !== undefined ? p.heightCm : p.height,
           weight: p.weightKg !== undefined ? p.weightKg : p.weight,
+          topLoad: p.maxWeightOnTopKg !== undefined ? p.maxWeightOnTopKg : p.topLoad,
           qty: p.quantity !== undefined ? p.quantity : p.qty,
         });
       });
@@ -137,6 +140,7 @@
           w: pick(row, ['widthcm', 'width', 'w', 'depth', 'depthcm', 'd']),
           h: pick(row, ['heightcm', 'height', 'h']),
           weight: pick(row, ['weightkg', 'weight', 'kg']),
+          topLoad: pick(row, ['maxweightontopkg', 'maxweightontop', 'weightontop', 'topload', 'stackinglimitkg', 'stackinglimit', 'maxtopload']),
           qty: pick(row, ['quantity', 'qty', 'cartons', 'orderqty', 'ordered']),
         });
       });

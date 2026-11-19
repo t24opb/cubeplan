@@ -23,9 +23,9 @@
   /** The example: the same library, with five of its products on order. */
   function exampleState() {
     var sample = D.sampleState();
-    return { library: sample.library, products: sample.products, types: D.defaultContainers(), settings: { kpi: 85, maxChange: 5, gap: 5 }, choice: 'auto', example: true };
+    return { library: sample.library, products: sample.products, types: D.defaultContainers(), settings: { kpi: 85, maxChange: 5, gap: 5, heavyLow: true, balance: true }, choice: 'auto', example: true };
   }
-  var CARTON_FIELDS = ['name', 'sku', 'l', 'w', 'h', 'weight', 'tippable', 'colour'];
+  var CARTON_FIELDS = ['name', 'sku', 'l', 'w', 'h', 'weight', 'topLoad', 'tippable', 'colour'];
   /** A library product with the same carton as an order line. */
   function libraryCopy(line) {
     var item = { id: D.newId(), qty: 0 };
@@ -41,7 +41,7 @@
   function businessKey(id) { return 'cubeplanner.business.' + id + '.v1'; }
   function storageKey() { return inBusiness() ? businessKey(Cloud.business.id) : KEY; }
   function blank() {
-    return { library: [], products: [], types: D.defaultContainers(), settings: { kpi: 85, maxChange: 5, gap: 5 }, choice: 'auto', example: false };
+    return { library: [], products: [], types: D.defaultContainers(), settings: { kpi: 85, maxChange: 5, gap: 5, heavyLow: true, balance: true }, choice: 'auto', example: false };
   }
 
   function restore(key) {
@@ -51,6 +51,9 @@
         // Saved before there was a library: every order line becomes a
         // library product too.
         if (!Array.isArray(saved.library)) saved.library = [];
+        // Saved before stacking strength and weight balance: both start on.
+        if (saved.settings.heavyLow === undefined) saved.settings.heavyLow = true;
+        if (saved.settings.balance === undefined) saved.settings.balance = true;
         saved.products.forEach(function (line) {
           if (line.lib && saved.library.some(function (item) { return item.id === line.lib; })) return;
           var item = libraryCopy(line);
@@ -124,6 +127,8 @@
     $('out-kpi').textContent = state.settings.kpi + '%';
     $('in-change').value = state.settings.maxChange;
     $('in-gap').value = state.settings.gap;
+    $('in-heavy').checked = !!state.settings.heavyLow;
+    $('in-balance').checked = !!state.settings.balance;
   }
 
   function renderTypes() {
@@ -250,7 +255,8 @@
           field('wide', 'Name', 'name', 'text', p.name) + field('', 'SKU', 'sku', 'text', p.sku) +
           field('', 'Length cm', 'l', 'number', p.l) + field('', 'Width cm', 'w', 'number', p.w) + field('', 'Height cm', 'h', 'number', p.h) +
           field('', 'Weight kg', 'weight', 'number', p.weight) +
-          '<div class="field wide" style="justify-content:flex-end"><label class="check" for="d-tip" style="font:inherit;letter-spacing:0;text-transform:none;color:inherit"><input type="checkbox" id="d-tip" data-f="tippable"' + (p.tippable ? ' checked' : '') + '>May be loaded on its side or end</label></div>' +
+          field('wide', 'Max weight on top kg', 'topLoad', 'number', p.topLoad).replace('<input', '<input placeholder="No limit" title="The most weight one carton can carry on top of it. Leave empty for no limit of its own; 0 means nothing may be stacked on it."') +
+          '<div class="field full"><label class="check" for="d-tip" style="font:inherit;letter-spacing:0;text-transform:none;color:inherit"><input type="checkbox" id="d-tip" data-f="tippable"' + (p.tippable ? ' checked' : '') + '>May be loaded on its side or end</label></div>' +
           '<div class="detail-foot"><span id="d-vol"></span><button type="button" class="btn quiet small danger" data-act="remove">Remove product</button></div>' +
           '</div></div></td></tr>';
       }
@@ -380,6 +386,12 @@
     if (result.oversize.length) {
       text += ' ' + result.oversize.map(function (p) { return p.name; }).join(', ') + (result.oversize.length === 1 ? ' is' : ' are') + ' too big for the containers allowed and left out.';
     }
+    var shown = plan(), uneven = [];
+    if (shown) shown.containers.forEach(function (c, i) { if (c.balance && !c.balance.light && !c.balance.ok) uneven.push(i + 1); });
+    if (uneven.length) {
+      text += ' Container' + (uneven.length === 1 ? ' ' + uneven[0] + ' is' : 's ' + uneven.join(', ') + ' are') + ' out of balance' +
+        (state.settings.balance ? ': the cartons only fit one way, so it could not be evened out.' : '. Switch on “Balance the weight” to rearrange.');
+    }
     el.textContent = text;
     if (!result.anyPass && needed && needed.key === neededKey() && needed.pct !== null && el.textContent.indexOf('would do it') >= 0) {
       var button = document.createElement('button');
@@ -392,7 +404,7 @@
     }
   }
   function neededKey() {
-    return JSON.stringify([state.settings, state.types, state.products.map(function (p) { return [p.l, p.w, p.h, p.weight, p.qty, p.locked, p.maxChange, p.tippable]; })]);
+    return JSON.stringify([state.settings, state.types, state.products.map(function (p) { return [p.l, p.w, p.h, p.weight, p.qty, p.locked, p.maxChange, p.tippable, p.topLoad]; })]);
   }
   /** Works out, once the page is idle, how much change would be needed. */
   function scheduleNeeded() {
@@ -428,6 +440,8 @@
       if (c.weight > 0) facts.push(int(c.weight) + (c.type.payload > 0 ? ' of ' + int(c.type.payload) : '') + ' kg' + (byWeight ? ' (at limit)' : ''));
       facts.push(plural(c.cartons, 'carton'));
       if (c.type.cost > 0) facts.push('$' + int(c.type.cost));
+      var bal = balanceText(c);
+      if (bal) facts.push('<span class="' + (bal.bad ? 'bal bad' : 'bal') + '" title="' + esc(bal.title) + '">' + esc(bal.short) + '</span>');
       var picture = thumbs[thumbKey(c)];
       return '<button type="button" class="cont" data-cont="' + i + '" aria-pressed="' + (i === contIndex) + '">' +
         '<span class="cont-pic" data-thumb="' + i + '">' + (picture ? '<img alt="" src="' + picture + '">' : '') + '</span>' +
@@ -438,6 +452,32 @@
         '<span class="mix">' + mix + '</span></button>';
     }).join('');
     drawThumbsSoon();
+  }
+
+  /**
+   A container's weight balance in words. Shares are front (closed end)
+   to doors, and side to side; out of balance is more than 60% in one half.
+  */
+  function balanceText(c) {
+    var b = c.balance;
+    if (!b) return null;
+    function pair(share) { var a = Math.round(share * 100); return a + ' / ' + (100 - a); }
+    var limit = Math.round(P.HALF_LIMIT * 100), problems = [];
+    if (!b.light) {
+      if (!b.lengthOk) problems.push(b.front > 0.5 ? 'front-heavy ' + pair(b.front) : 'door-heavy ' + pair(b.front));
+      if (!b.sideOk) problems.push('heavy to one side ' + pair(Math.max(b.left, 1 - b.left)));
+    }
+    var title = Math.round(b.front * 100) + '% of the weight is in the front half (the closed end), ' + (100 - Math.round(b.front * 100)) + '% in the door half; ' +
+      pair(Math.max(b.left, 1 - b.left)) + ' from side to side. ' +
+      (b.light ? 'This load is too light for its balance to matter.' : 'No half should carry more than ' + limit + '%.') +
+      (b.unweighed ? ' ' + plural(b.unweighed, 'carton') + ' with no weight left out.' : '');
+    return {
+      bad: problems.length > 0,
+      short: problems.length ? problems.join(', ') : 'balance ' + pair(b.front) + (b.unweighed ? '*' : ''),
+      long: problems.length ? 'Out of balance: ' + problems.join(', ') + ' (no half should carry more than ' + limit + '%)'
+        : 'Weight balance: ' + pair(b.front) + ' front to doors, ' + pair(Math.max(b.left, 1 - b.left)) + ' side to side' + (b.light ? '' : ' (within ' + limit + ' / ' + (100 - limit) + ')'),
+      title: title,
+    };
   }
 
   // A small 3D picture of each container for its card. Drawn one at a
@@ -553,6 +593,13 @@
   /** The business's products become the library; the order follows them. */
   function applyLibrary(items) {
     items.forEach(function (item, index) { if (!item.colour) item.colour = D.COLOURS[index % D.COLOURS.length]; });
+    // Until the shared library can hold stacking limits, the ones set
+    // in this browser are kept here.
+    if (!Cloud.stacking) {
+      var limits = {};
+      state.library.forEach(function (item) { if (item.topLoad !== null && item.topLoad !== undefined) limits[item.id] = item.topLoad; });
+      items.forEach(function (item) { item.topLoad = limits[item.id] === undefined ? null : limits[item.id]; });
+    }
     state.library = items;
     // A product a colleague has changed is changed here too; one they
     // have removed leaves the order.
@@ -787,9 +834,10 @@
       pct(c.use) + ' full · ' + m3(c.volume) + ' of ' + m3(c.capacity) + ' m³' +
         (c.weight > 0 ? ' · ' + int(c.weight) + ' kg' + (c.type.payload > 0 ? ' of ' + int(c.type.payload) + ' kg' : '') : '') +
         ' · ' + plural(c.cartons, 'carton'),
-      '',
-      'Load:',
     ];
+    var bal = balanceText(c);
+    if (bal) out.push(bal.long);
+    out.push('', 'Load:');
     Object.keys(c.counts).map(function (id) { return { p: product(id) || {}, n: c.counts[id] }; })
       .sort(function (a, b) { return b.n - a.n; })
       .forEach(function (row) {
@@ -829,6 +877,8 @@
       state.settings.gap = Math.max(0, Math.min(50, +this.value || 0));
       recalcSoon();
     });
+    $('in-heavy').addEventListener('change', function () { state.settings.heavyLow = this.checked; recalc(true); });
+    $('in-balance').addEventListener('change', function () { state.settings.balance = this.checked; recalc(true); });
 
     $('type-chips').addEventListener('click', function (e) {
       var chip = e.target.closest('.chip');
@@ -922,6 +972,7 @@
       if (f === 'qty') p.qty = Math.max(0, Math.round(+el.value || 0));
       else if (f === 'maxChange') p.maxChange = el.value === '' ? null : Math.max(0, Math.min(100, +el.value || 0));
       else if (f === 'tippable') p.tippable = el.checked;
+      else if (f === 'topLoad') p.topLoad = el.value === '' ? null : Math.max(0, +el.value || 0);
       else if (f === 'name') p.name = el.value.trim() || 'Carton';
       else if (f === 'sku') p.sku = el.value.trim();
       else p[f] = Math.max(0, +el.value || 0);

@@ -31,6 +31,13 @@ for the website, the iPhone app and anything else:
   products, invite people or remove them;
 - a business always keeps at least one admin.
 
+## Stacking limits
+
+`stacking.sql` adds one column to products (`top_load_kg`, the most weight a
+carton can carry on top). Run it once in **SQL Editor**. The site notices by
+itself: before it is run, a product's limit is kept only in the browser it
+was typed into; afterwards everyone in the business shares it.
+
 ## The paywall (Stripe) — written, NOT switched on yet
 
 One flat monthly subscription per business. The example on the website is

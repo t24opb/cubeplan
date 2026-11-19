@@ -44,6 +44,7 @@
     return {
       id: row.id, name: row.name, sku: row.sku || '', l: +row.length_cm, w: +row.width_cm, h: +row.height_cm,
       weight: +row.weight_kg || 0, tippable: !!row.tippable, colour: row.colour || null, qty: 0,
+      topLoad: row.top_load_kg === null || row.top_load_kg === undefined ? null : +row.top_load_kg,
     };
   }
   function toRow(item) {
@@ -53,6 +54,8 @@
       weight_kg: item.weight > 0 ? Math.round(item.weight * 100) / 100 : null,
       tippable: !!item.tippable, colour: item.colour || null,
     };
+    // Stacking limits are shared once the database has the column for them (supabase/stacking.sql).
+    if (Cloud.stacking) row.top_load_kg = item.topLoad === null || item.topLoad === undefined ? null : Math.round(item.topLoad * 100) / 100;
     return row;
   }
 
@@ -175,6 +178,10 @@
 
   // ---- products ----
   Cloud.products = async function () {
+    if (Cloud.stacking === undefined) {
+      var probe = await client.from('products').select('top_load_kg').limit(1);
+      Cloud.stacking = !probe.error;
+    }
     var rows = unwrap(await client.from('products').select('*').eq('business_id', Cloud.business.id).order('name'));
     return rows.map(fromRow);
   };

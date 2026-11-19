@@ -15,6 +15,17 @@ shows what it would take to fill every container properly.
 - **Options** — *As ordered*, *Top up* (extra cartons in the gaps) and *Trim*
   (fewer cartons so a container is saved). The suggested one is the option
   that meets the minimum fill with the least change to the order.
+- **Stacking strength** — a product may carry "Max weight on top" (kg; empty
+  for no limit, 0 for nothing on top). With *Heavy at the bottom* on, a carton
+  with no limit of its own carries no more than it would at the bottom of a
+  full-height stack of its own kind, so a heavy stack never stands on light
+  cartons. Weight is taken to spread evenly over what it stands on.
+- **Weight balance** — every container shows how its weight is shared, front
+  to doors and side to side; more than 60% in one half is out of balance.
+  With *Balance the weight* on, a container that is out is rearranged (walls
+  reordered, mirrored or centred; a part load is loaded lower and further
+  along the floor). Balancing never changes which cartons are loaded. Needs
+  each product's weight; cartons with none are left out and counted.
 - **3D** — the loaded container and each carton, turning, like the app.
 
 - **Business accounts** — Sign in (a link is emailed; no password) to work in
@@ -42,6 +53,7 @@ internet.)
 | `js/app.js` | The page's behaviour |
 | `js/cloud.js`, `js/config.js` | Business accounts: sign-in and shared products (Supabase) |
 | `supabase/schema.sql` | The accounts database: tables and who may see what |
+| `supabase/stacking.sql` | Adds the shared stacking limit to products (run once; until then limits stay in the browser) |
 | `tests/packer.test.js` | `node website/tests/packer.test.js` |
 | `tests/bench.js` | How full containers get on 200 made-up furniture orders |
 | `tools/build_single_page.py` | Writes `dist/container-builder.html`, the one-file version |
@@ -49,5 +61,6 @@ internet.)
 ## Not built yet
 
 Palletised loads (cartons on pallets, pallets in the container), saving
-orders and plans to the business account (they stay in the browser), a live link from the app, weight distribution and
-load restraint checks.
+orders and plans to the business account (they stay in the browser), a live link from the app, axle loads, interlocked
+(brick-pattern) stacking, loading order for several drops, and load restraint
+checks.

@@ -1,4 +1,5 @@
-// node website/tests/bench.js — how full do full containers get on furniture-like orders?
+// node website/tests/bench.js [heavyLow] [balance] — how full do full containers get on furniture-like orders?
+const flags = process.argv.slice(2);
 const P = require('../js/packer.js'), D = require('../js/data.js');
 let seed = 777; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
 const fills = []; let t0 = Date.now(), worstMs = 0;
@@ -12,7 +13,7 @@ for (let run = 0; run < 200; run++) {
   }
   const types = D.defaultContainers();
   const s = Date.now();
-  const r = P.optimise(products, types, { kpi: 85, maxChange: 5, gap: 5 });
+  const r = P.optimise(products, types, { kpi: 85, maxChange: 5, gap: 5, heavyLow: flags.includes('heavyLow'), balance: flags.includes('balance') });
   worstMs = Math.max(worstMs, Date.now() - s);
   r.asOrdered.containers.slice(0, -1).forEach(c => { if (c.weightFill < 0.97) fills.push(c.fill); });
 }
