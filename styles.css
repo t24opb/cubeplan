@@ -65,7 +65,7 @@ button, input, textarea { font: inherit; color: inherit; }
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.brand-mark { flex: none; }
+.brand-mark { flex: none; border-radius: 8px; display: block; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
 .brand-name { font: 700 19px/1.05 var(--display); letter-spacing: 0.01em; }
 .brand-sub { font: 500 12px/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }

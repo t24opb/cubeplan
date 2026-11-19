@@ -10,6 +10,10 @@ import pathlib, re
 root = pathlib.Path(__file__).resolve().parent.parent
 page = (root / "index.html").read_text()
 body = page.split("<!-- app:start -->")[1].split("<!-- app:end -->")[0].strip()
+# The header's icon travels inside the one file.
+import base64
+icon = base64.b64encode((root / "icon-96.png").read_bytes()).decode()
+body = body.replace('src="icon-96.png"', f'src="data:image/png;base64,{icon}"')
 fonts = re.search(r'<link rel="stylesheet" href="(https://fonts\.googleapis\.com[^"]+)">', page).group(1)
 three = re.search(r'<script src="(https://cdnjs\.cloudflare\.com[^"]+)"></script>', page).group(1)
 # The one-file version cannot reach the accounts service (a Claude artifact
