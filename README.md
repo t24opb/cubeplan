@@ -3,7 +3,10 @@
 Builds container loads from the cartons the SmartPallet app measures, and
 shows what it would take to fill every container properly.
 
-- **Order** — products with carton size, weight and quantity. Import the app's
+- **Products** — the library on the left: every carton you have, with a small
+  drawing of it. Drag one onto the container (or press +) and the page offers
+  the number of cartons that fit in the space left.
+- **Order** — the products in this load, with carton size, weight and quantity. Import the app's
   "Export all products as JSON" file (Settings → Business API), or a CSV with
   a header row: name, sku, length, width, height (cm), weight (kg), quantity.
 - **Rules** — which container types may be used, the minimum fill every

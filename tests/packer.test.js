@@ -142,12 +142,57 @@ test('reads the app\'s JSON export and a CSV', () => {
   const a = D.parseProducts(json, 0);
   assert.strictEqual(a.products.length, 1);
   assert.strictEqual(a.products[0].l, 40.1);
-  assert.strictEqual(a.products[0].qty, 100);
+  assert.strictEqual(a.products[0].qty, 0, 'no quantity in the file means none');
   const csv = 'Name,SKU,Length (cm),Width (cm),Height (cm),Weight (kg),Quantity\n"Sofa, 3 seat",S3,200,90,80,45,24\nBad,,,,,,\n';
   const b = D.parseProducts(csv, 0);
   assert.strictEqual(b.products.length, 1);
   assert.strictEqual(b.products[0].name, 'Sofa, 3 seat');
   assert.strictEqual(b.products[0].qty, 24);
+  assert.strictEqual(b.skipped, 1);
+});
+
+test('the example has a library with more products than the order', () => {
+  const s = D.sampleState();
+  assert.strictEqual(s.products.length, 5);
+  assert(s.library.length > s.products.length);
+  s.products.forEach(line => {
+    const item = s.library.find(i => i.id === line.lib);
+    assert(item, 'every order line points at a library product');
+    assert.strictEqual(item.l, line.l);
+    assert.notStrictEqual(item.id, line.id);
+  });
+});
+
+test('room for a product: what is added never needs another container', () => {
+  const s = D.sampleState();
+  const all = types('40HC');
+  const before = P.plan(s.products, all, settings, 'asOrdered').containers.length;
+  // A product not yet on order.
+  const fresh = Object.assign({}, s.library[6], { id: 'candidate' });
+  const room = P.roomFor(s.products, all, settings, fresh);
+  assert(room.count > 0 && !room.opensNew, 'the last container has room');
+  assert.strictEqual(room.containers, before);
+  const after = P.plan(s.products.concat([Object.assign({}, fresh, { qty: room.count })]), all, settings, 'asOrdered');
+  assert(after.feasible);
+  assert.strictEqual(after.containers.length, before);
+  // One already on order: the answer is how many MORE.
+  const more = P.roomFor(s.products, all, settings, s.products[1]);
+  assert(more.count > 0);
+  const grown = s.products.map(p => p === s.products[1] ? Object.assign({}, p, { qty: p.qty + more.count }) : p);
+  assert.strictEqual(P.plan(grown, all, settings, 'asOrdered').containers.length, before);
+  console.log('     room in the example order: ' + room.count + ' × ' + fresh.name + ', or ' + more.count + ' more × ' + s.products[1].name);
+});
+
+test('room for a product: an empty order fills one container; a huge carton is refused', () => {
+  const all = types('40HC');
+  const item = D.product({ name: 'A', l: 60, w: 40, h: 30, weight: 5 }, 0);
+  const room = P.roomFor([], all, settings, item);
+  assert(room.count > 500 && !room.opensNew && room.containers === 0);
+  const one = P.plan([Object.assign({}, item, { qty: room.count })], all, settings, 'asOrdered');
+  assert.strictEqual(one.containers.length, 1);
+  assert(one.containers[0].fill > 0.7);
+  const mast = D.product({ name: 'Mast', l: 1300, w: 20, h: 20 }, 1);
+  assert.strictEqual(P.roomFor([], all, settings, mast).tooBig, true);
 });
 
 console.log(failures ? failures + ' failed' : 'all passed');

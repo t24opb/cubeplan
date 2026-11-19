@@ -405,6 +405,63 @@
     return null;
   }
 
+  /**
+   How many cartons of `candidate` can be added to the order without
+   needing another container. `candidate` may already be in the order
+   (matched by id), in which case the answer is how many MORE fit.
+   When the containers planned are already full, the answer is how
+   many would fill one more (`opensNew`).
+  */
+  function roomFor(products, types, settings, candidate) {
+    var usable = types.filter(function (t) { return t.enabled !== false && t.length > 0 && t.width > 0 && t.height > 0; });
+    var vol = candidate.l * candidate.w * candidate.h;
+    if (!usable.length || !(vol > 0)) return { count: 0, opensNew: false, containers: 0, tooBig: false };
+    var gap = settings.gap || 0;
+    var fitsSomewhere = usable.some(function (t) {
+      return orientations(candidate).some(function (o) {
+        return o[0] <= t.length - gap + EPS && o[1] <= t.width - gap + EPS && o[2] <= t.height - gap + EPS;
+      });
+    });
+    var live = products.filter(function (p) { return p.qty > 0 && p.l > 0 && p.w > 0 && p.h > 0; });
+    var others = live.filter(function (p) { return p.id !== candidate.id; });
+    var existing = live.filter(function (p) { return p.id === candidate.id; })[0];
+    var baseQty = existing ? existing.qty : 0;
+    function withExtra(n) {
+      if (baseQty + n <= 0) return others;
+      var line = {};
+      Object.keys(candidate).forEach(function (key) { line[key] = candidate[key]; });
+      line.qty = baseQty + n;
+      return others.concat([line]);
+    }
+    var base = withExtra(0).length ? plan(withExtra(0), usable, settings, 'asOrdered') : { containers: [] };
+    var planned = base.containers.length;
+    if (!fitsSomewhere) return { count: 0, opensNew: false, containers: planned, tooBig: true };
+    var biggest = Math.max.apply(null, usable.map(typeVolume));
+    var orderedVolume = withExtra(0).reduce(function (sum, p) { return sum + p.qty * p.l * p.w * p.h; }, 0);
+    function most(limit) {
+      var hi = Math.min(50000, Math.floor((limit * biggest - orderedVolume) / vol));
+      if (hi <= 0) return 0;
+      function fits(n) {
+        var trial = plan(withExtra(n), usable, settings, 'asOrdered');
+        return trial.feasible && trial.containers.length <= limit;
+      }
+      if (fits(hi)) return hi;
+      var lo = 0;
+      while (hi - lo > 1) {
+        var mid = (lo + hi) >> 1;
+        if (fits(mid)) lo = mid; else hi = mid;
+      }
+      return lo;
+    }
+    var count = most(Math.max(1, planned));
+    var opensNew = false;
+    if (count === 0 && planned >= 1) {
+      count = most(planned + 1);
+      opensNew = true;
+    }
+    return { count: count, opensNew: opensNew, containers: planned, tooBig: false };
+  }
+
   /** Every carton of a container, in loading order, for drawing. */
   function cartons(container) {
     var out = [];
@@ -423,7 +480,7 @@
 
   var api = {
     orientations: orientations, bounds: bounds, plan: plan, optimise: optimise,
-    changeNeeded: changeNeeded, cartons: cartons, typeVolume: typeVolume,
+    changeNeeded: changeNeeded, cartons: cartons, typeVolume: typeVolume, roomFor: roomFor,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SPPacker = api;

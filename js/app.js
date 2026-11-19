@@ -13,12 +13,31 @@
   var UNLOCK_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.3-1.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 
   function fresh() {
-    return { products: D.sampleProducts(), types: D.defaultContainers(), settings: { kpi: 85, maxChange: 5, gap: 5 }, choice: 'auto', example: true };
+    var sample = D.sampleState();
+    return { library: sample.library, products: sample.products, types: D.defaultContainers(), settings: { kpi: 85, maxChange: 5, gap: 5 }, choice: 'auto', example: true };
+  }
+  var CARTON_FIELDS = ['name', 'sku', 'l', 'w', 'h', 'weight', 'tippable', 'colour'];
+  /** A library product with the same carton as an order line. */
+  function libraryCopy(line) {
+    var item = { id: D.newId(), qty: 0 };
+    CARTON_FIELDS.forEach(function (key) { item[key] = line[key]; });
+    return item;
   }
   function restore() {
     try {
       var saved = JSON.parse(window.localStorage.getItem(KEY));
-      if (saved && Array.isArray(saved.products) && Array.isArray(saved.types) && saved.types.length && saved.settings) return saved;
+      if (saved && Array.isArray(saved.products) && Array.isArray(saved.types) && saved.types.length && saved.settings) {
+        // Saved before there was a library: every order line becomes a
+        // library product too.
+        if (!Array.isArray(saved.library)) saved.library = [];
+        saved.products.forEach(function (line) {
+          if (line.lib && saved.library.some(function (item) { return item.id === line.lib; })) return;
+          var item = libraryCopy(line);
+          saved.library.push(item);
+          line.lib = item.id;
+        });
+        return saved;
+      }
     } catch (ignore) { /* nothing saved, or storage is off */ }
     return null;
   }
@@ -51,6 +70,9 @@
   function m3(cubicCm) { return (cubicCm / 1e6).toFixed(1); }
   function plural(n, word) { return int(n) + ' ' + word + (n === 1 ? '' : 's'); }
   function product(id) { return state.products.filter(function (p) { return p.id === id; })[0]; }
+  function libraryItem(id) { return state.library.filter(function (item) { return item.id === id; })[0]; }
+  /** The order line for a library product, if it is on order. */
+  function lineFor(libId) { return state.products.filter(function (p) { return p.lib === libId; })[0]; }
   function sizeText(p) {
     return num(p.l) + ' × ' + num(p.w) + ' × ' + num(p.h) + ' cm' + (p.weight > 0 ? ' · ' + num(p.weight) + ' kg' : '');
   }
@@ -89,6 +111,85 @@
         cell('length', 0.1) + cell('width', 0.1) + cell('height', 0.1) + cell('payload', 1) + cell('cost', 1) +
         '<td>' + (t.custom ? '<button type="button" class="btn quiet small danger" data-type="' + esc(t.id) + '" data-tf="remove">Remove</button>' : '') + '</td></tr>';
     }).join('');
+  }
+
+  // ---------- product library ----------
+  /** A small drawing of the carton, to its own proportions. */
+  function cartonDrawing(l, w, h, colour) {
+    var c = Math.cos(Math.PI / 6);
+    function at(x, y, z) { return [(x - y) * c, (x + y) * 0.5 - z]; }
+    var p = { x: at(l, 0, 0), y: at(0, w, 0), xy: at(l, w, 0), z: at(0, 0, h), xz: at(l, 0, h), yz: at(0, w, h), xyz: at(l, w, h) };
+    var all = Object.keys(p).map(function (key) { return p[key]; });
+    var minX = Math.min.apply(null, all.map(function (q) { return q[0]; })), maxX = Math.max.apply(null, all.map(function (q) { return q[0]; }));
+    var minY = Math.min.apply(null, all.map(function (q) { return q[1]; })), maxY = Math.max.apply(null, all.map(function (q) { return q[1]; }));
+    var k = Math.min(50 / Math.max(1, maxX - minX), 40 / Math.max(1, maxY - minY));
+    var ox = (54 - (maxX - minX) * k) / 2, oy = (44 - (maxY - minY) * k) / 2;
+    function points(keys) {
+      return keys.map(function (key) { return ((p[key][0] - minX) * k + ox).toFixed(1) + ',' + ((p[key][1] - minY) * k + oy).toFixed(1); }).join(' ');
+    }
+    var fill = esc(colour || '#c29e73');
+    return '<svg viewBox="0 0 54 44" aria-hidden="true">' +
+      '<polygon class="edge" fill="' + fill + '" points="' + points(['x', 'xy', 'xyz', 'xz']) + '"/>' +
+      '<polygon class="edge" fill="' + fill + '" points="' + points(['y', 'xy', 'xyz', 'yz']) + '"/>' +
+      '<polygon fill="#000" fill-opacity="0.2" points="' + points(['y', 'xy', 'xyz', 'yz']) + '"/>' +
+      '<polygon class="edge" fill="' + fill + '" points="' + points(['z', 'xz', 'xyz', 'yz']) + '"/>' +
+      '<polygon fill="#fff" fill-opacity="0.28" points="' + points(['z', 'xz', 'xyz', 'yz']) + '"/></svg>';
+  }
+
+  function renderLibrary() {
+    $('lib-count').textContent = state.library.length ? state.library.length + (state.library.length === 1 ? ' product' : ' products') : '';
+    $('lib-list').innerHTML = state.library.map(function (item) {
+      var line = lineFor(item.id);
+      return '<div class="lib-item" draggable="true" data-lib="' + item.id + '" title="Drag onto the container">' +
+        '<span class="lib-box">' + cartonDrawing(item.l, item.w, item.h, item.colour) + '</span>' +
+        '<span><span class="lib-name">' + esc(item.name) + '</span><span class="lib-size">' + esc(num(item.l) + ' × ' + num(item.w) + ' × ' + num(item.h) + ' cm') + '</span>' +
+        (line && line.qty > 0 ? '<span class="lib-in">' + int(line.qty) + ' in the load</span>' : '') + '</span>' +
+        '<span class="lib-actions"><button type="button" class="lib-btn" data-act="add" aria-label="Add ' + esc(item.name) + ' to the load" title="Add to the load">+</button>' +
+        (line ? '' : '<button type="button" class="lib-btn remove" data-act="forget" aria-label="Remove ' + esc(item.name) + ' from the library" title="Remove from the library">×</button>') +
+        '</span></div>';
+    }).join('') || '<p class="lib-empty">No products yet. Import a file from the app, or add a product to the order.</p>';
+  }
+
+  /** Asks how many cartons of a library product to add, offering what fits. */
+  var adding = null;
+  function openAdd(libId) {
+    var item = libraryItem(libId);
+    if (!item) return;
+    var line = lineFor(libId);
+    var candidate = {};
+    Object.keys(item).forEach(function (key) { candidate[key] = item[key]; });
+    candidate.id = line ? line.id : 'candidate';
+    var room = P.roomFor(state.products, state.types, state.settings, candidate);
+    adding = libId;
+    $('add-title').textContent = 'Add ' + item.name;
+    var hint;
+    if (room.tooBig) hint = 'This carton is too big for the containers you have allowed, so it will be left out of the plan.';
+    else if (room.containers === 0) hint = plural(room.count, 'carton') + ' would fill one container.';
+    else if (room.opensNew) hint = 'The ' + plural(room.containers, 'container') + ' planned ' + (room.containers === 1 ? 'is' : 'are') + ' full. ' + plural(room.count, 'carton') + ' would fill one more.';
+    else hint = plural(room.count, (line ? 'more ' : '') + 'carton') + ' fit in the space left in the ' + plural(room.containers, 'container') + ' already planned.';
+    $('add-hint').textContent = hint;
+    $('add-qty').value = Math.max(1, room.count);
+    $('add-sheet').hidden = false;
+    $('add-qty').focus();
+    $('add-qty').select();
+  }
+  function confirmAdd() {
+    var item = adding && libraryItem(adding);
+    var qty = Math.max(0, Math.round(+$('add-qty').value || 0));
+    $('add-sheet').hidden = true;
+    adding = null;
+    if (!item || !qty) return;
+    var line = lineFor(item.id);
+    if (line) line.qty += qty;
+    else {
+      line = D.orderLine(item, qty);
+      state.products.push(line);
+    }
+    edited();
+    // Show where it went: the product just added stands out in the picture.
+    litId = line.id;
+    renderOrder(); recalc();
+    toast('Added ' + plural(qty, 'carton') + ' of ' + item.name + '.');
   }
 
   // ---------- order table ----------
@@ -315,7 +416,7 @@
     var shown = plan();
     if (!shown || contIndex >= shown.containers.length) contIndex = 0;
     if (litId && !product(litId)) litId = null;
-    renderOptions(); renderAdvice(); renderContainers(); renderStage(keepView); updateOutputs();
+    renderOptions(); renderAdvice(); renderContainers(); renderStage(keepView); updateOutputs(); renderLibrary();
     save();
     scheduleNeeded();
   }
@@ -470,6 +571,9 @@
       else p[f] = Math.max(0, +el.value || 0);
       edited();
       updateRowLabel(p);
+      // The same carton in the library follows.
+      var item = libraryItem(p.lib);
+      if (item && CARTON_FIELDS.indexOf(f) >= 0) item[f] = p[f];
       if ((f === 'l' || f === 'w' || f === 'h') && e.type === 'change' && cartonViewer && cartonViewer.ok && p.id === openId) cartonViewer.showCarton(p);
       recalcSoon();
     }
@@ -480,7 +584,10 @@
     body.addEventListener('change', fieldChanged);
 
     $('btn-add').addEventListener('click', function () {
-      var p = D.product({ name: 'New product', l: 60, w: 40, h: 30, weight: 10, qty: 100, tippable: false }, state.products.length);
+      var p = D.product({ name: 'New product', l: 60, w: 40, h: 30, weight: 10, qty: 100, tippable: false }, state.library.length);
+      var entry = libraryCopy(p);
+      state.library.push(entry);
+      p.lib = entry.id;
       state.products.push(p);
       openId = p.id; litId = p.id; edited();
       renderOrder(); recalc();
@@ -505,12 +612,22 @@
       var reader = new FileReader();
       reader.onload = function () {
         try {
+          // An untouched example is replaced; otherwise the file is added.
           var replacing = state.example;
-          var read = D.parseProducts(String(reader.result), replacing ? 0 : state.products.length);
-          state.products = replacing ? read.products : state.products.concat(read.products);
+          var read = D.parseProducts(String(reader.result), replacing ? 0 : state.library.length);
+          if (replacing) { state.library = []; state.products = []; }
+          var ordered = 0;
+          read.products.forEach(function (p) {
+            var item = libraryCopy(p);
+            state.library.push(item);
+            if (p.qty > 0) { state.products.push(D.orderLine(item, p.qty)); ordered++; }
+          });
           state.example = false; state.choice = 'auto'; openId = null; litId = null;
           renderOrder(); recalc();
-          toast(read.note);
+          var n = read.products.length;
+          toast(plural(n, 'product') + ' added to the library. ' +
+            (ordered === n ? 'All are on the order.' : ordered ? ordered + ' had a quantity and ' + (ordered === 1 ? 'is' : 'are') + ' on the order.' : 'Drag them onto the container to build a load.') +
+            (read.skipped ? ' ' + read.skipped + ' skipped (no size).' : ''));
         } catch (error) {
           toast(error instanceof SyntaxError ? 'That file could not be read. Use the app\'s JSON export, or a CSV with a header row.' : error.message);
         }
@@ -519,6 +636,57 @@
       reader.onerror = function () { toast('That file could not be opened.'); };
       reader.readAsText(file);
     });
+    // The library: drag onto the container (or the order), or press +.
+    var list = $('lib-list'), dragging = null;
+    list.addEventListener('click', function (e) {
+      var card = e.target.closest('.lib-item'), act = e.target.closest('[data-act]');
+      if (!card || !act) return;
+      var id = card.getAttribute('data-lib');
+      if (act.getAttribute('data-act') === 'add') { openAdd(id); return; }
+      var index = state.library.indexOf(libraryItem(id)), removed = state.library[index];
+      if (index < 0 || lineFor(id)) return;
+      state.library.splice(index, 1);
+      edited(); renderLibrary(); save();
+      toast(removed.name + ' removed from the library.', 'Undo', function () { state.library.splice(index, 0, removed); renderLibrary(); save(); });
+    });
+    list.addEventListener('dragstart', function (e) {
+      var card = e.target.closest ? e.target.closest('.lib-item') : null;
+      if (!card) return;
+      dragging = card.getAttribute('data-lib');
+      try { e.dataTransfer.setData('text/plain', libraryItem(dragging).name); e.dataTransfer.effectAllowed = 'copy'; } catch (ignore) { /* some browsers refuse */ }
+      card.classList.add('dragging');
+      document.body.classList.add('dragging-product');
+    });
+    list.addEventListener('dragend', function (e) {
+      var card = e.target.closest ? e.target.closest('.lib-item') : null;
+      if (card) card.classList.remove('dragging');
+      document.body.classList.remove('dragging-product');
+      $('stage').classList.remove('drop-over');
+      dragging = null;
+    });
+    [$('stage'), document.querySelector('.order')].forEach(function (target) {
+      target.addEventListener('dragover', function (e) {
+        if (!dragging) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'copy'; } catch (ignore) { /* not settable everywhere */ }
+        target.classList.add('drop-over');
+      });
+      target.addEventListener('dragleave', function (e) {
+        if (!target.contains(e.relatedTarget)) target.classList.remove('drop-over');
+      });
+      target.addEventListener('drop', function (e) {
+        if (!dragging) return;
+        e.preventDefault();
+        var id = dragging;
+        target.classList.remove('drop-over');
+        document.body.classList.remove('dragging-product');
+        dragging = null;
+        openAdd(id);
+      });
+    });
+    $('add-form').addEventListener('submit', function (e) { e.preventDefault(); confirmAdd(); });
+    $('add-cancel').addEventListener('click', function () { $('add-sheet').hidden = true; adding = null; });
+
     $('btn-copy').addEventListener('click', copyPlan);
     $('btn-copy-close').addEventListener('click', function () { $('copy-sheet').hidden = true; });
 

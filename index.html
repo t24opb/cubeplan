@@ -77,6 +77,15 @@
   </section>
 
   <div class="grid">
+    <section class="panel library" aria-label="Product library">
+      <div class="panel-head">
+        <h2>Products</h2>
+        <span class="hint" id="lib-count"></span>
+      </div>
+      <p class="hint lib-hint">Drag a product onto the container to add it to the load, or press +.</p>
+      <div class="lib-list" id="lib-list"></div>
+    </section>
+
     <section class="panel plan" aria-label="Load plan">
       <div class="options" id="options"></div>
       <p class="advice" id="advice"></p>
@@ -92,6 +101,7 @@
           </div>
         </div>
         <div class="stage-empty" id="stage-empty" hidden></div>
+        <div class="stage-drop" aria-hidden="true"><span>Drop to add it to the load</span></div>
         <div class="stage-tip" id="stage-tip" hidden></div>
         <div class="stage-foot" id="stage-foot">
           <label for="in-seq">Loading order</label>
@@ -125,7 +135,7 @@
           <tfoot id="order-foot"></tfoot>
         </table>
       </div>
-      <p class="hint order-hint" id="order-hint">Select a product to see its carton and change its size. Quantities are cartons.</p>
+      <p class="hint order-hint" id="order-hint">Select a product to see its carton and change its size. Quantities are cartons. Removing a product here keeps it in the library.</p>
     </section>
   </div>
 
@@ -142,6 +152,20 @@
     <textarea id="copy-text" rows="10" readonly></textarea>
     <button type="button" class="btn solid" id="btn-copy-close">Done</button>
   </div>
+</div>
+<div class="sheet" id="add-sheet" hidden>
+  <form class="sheet-card" id="add-form">
+    <h2 id="add-title"></h2>
+    <p class="hint" id="add-hint"></p>
+    <div class="field">
+      <label for="add-qty">Cartons to add</label>
+      <input type="number" id="add-qty" min="1" step="1" inputmode="numeric">
+    </div>
+    <div class="sheet-actions">
+      <button type="button" class="btn quiet" id="add-cancel">Cancel</button>
+      <button type="submit" class="btn solid">Add to the load</button>
+    </div>
+  </form>
 </div>
 <!-- app:end -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

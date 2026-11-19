@@ -25,6 +25,16 @@
     { name: 'Futon', sku: 'FTN-01', l: 200, w: 116, h: 25, weight: 48, qty: 60, tippable: false },
   ];
 
+  // More products for the library that are not in the example order.
+  // Made-up names and plausible flat-pack carton sizes.
+  var LIBRARY_EXTRA = [
+    { name: 'Dining chairs, pack of 2', sku: 'DCH-02', l: 62, w: 48, h: 56, weight: 13, tippable: false },
+    { name: 'TV unit', sku: 'TVU-01', l: 165, w: 45, h: 18, weight: 32, tippable: true },
+    { name: 'Mattress in a box', sku: 'MTB-01', l: 112, w: 42, h: 42, weight: 28, tippable: true },
+    { name: 'Desk', sku: 'DSK-01', l: 128, w: 68, h: 14, weight: 24, tippable: true },
+    { name: 'Wardrobe', sku: 'WRD-01', l: 205, w: 62, h: 22, weight: 58, tippable: false },
+  ];
+
   var COLOURS = ['#C98B4E', '#3F7DB6', '#5E9E6B', '#C9573B', '#8468B8', '#D9AE3C', '#3F9C9E', '#B4557C', '#73808D', '#96703F'];
 
   var nextId = 1;
@@ -46,6 +56,26 @@
   }
 
   function sampleProducts() { return SAMPLE.map(product); }
+
+  /** A line of the order for a product in the library. */
+  function orderLine(item, qty) {
+    var line = product(item, 0);
+    line.colour = item.colour;
+    line.lib = item.id;
+    line.qty = Math.max(0, Math.round(+qty || 0));
+    return line;
+  }
+
+  /** The example: a library of ten products, five of them on order. */
+  function sampleState() {
+    var library = SAMPLE.concat(LIBRARY_EXTRA).map(function (fields, index) {
+      var item = product(fields, index);
+      item.qty = 0;
+      return item;
+    });
+    var products = SAMPLE.map(function (fields, index) { return orderLine(library[index], fields.qty); });
+    return { library: library, products: products };
+  }
   function defaultContainers() { return JSON.parse(JSON.stringify(CONTAINERS)); }
 
   /** Splits one CSV line, minding quoted fields. */
@@ -75,7 +105,7 @@
   /**
    Reads products from a file's text: the app's "Export all products as
    JSON" file, or a CSV with a header row (name, sku, length, width,
-   height in cm, weight in kg, quantity). Returns { products, note }.
+   height in cm, weight in kg, quantity). Returns { products, skipped }.
   */
   function parseProducts(text, startIndex) {
     var rows = [];
@@ -113,20 +143,16 @@
     }
     var usable = rows.filter(function (r) { return +r.l > 0 && +r.w > 0 && +r.h > 0; });
     if (!usable.length) throw new Error('No products with a length, width and height were found in that file.');
-    var noQty = usable.filter(function (r) { return !(+r.qty > 0); }).length;
-    var products = usable.map(function (r, i) {
-      if (!(+r.qty > 0)) r.qty = 100;
-      return product(r, (startIndex || 0) + i);
-    });
-    var note = products.length + (products.length === 1 ? ' product' : ' products') + ' added.';
-    if (noQty) note += ' ' + (noQty === products.length ? 'The file has no quantities, so each starts at 100 cartons.' : noQty + ' had no quantity and start at 100 cartons.');
-    if (rows.length > usable.length) note += ' ' + (rows.length - usable.length) + ' skipped (no size).';
-    return { products: products, note: note };
+    // A product with no quantity in the file comes in with none: it
+    // goes in the library, ready to be added to a load.
+    var products = usable.map(function (r, i) { return product(r, (startIndex || 0) + i); });
+    return { products: products, skipped: rows.length - usable.length };
   }
 
   var api = {
     COLOURS: COLOURS, product: product, sampleProducts: sampleProducts,
     defaultContainers: defaultContainers, parseProducts: parseProducts, newId: newId,
+    sampleState: sampleState, orderLine: orderLine,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SPData = api;
