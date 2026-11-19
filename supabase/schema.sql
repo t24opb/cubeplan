@@ -176,6 +176,17 @@ create policy products_add    on public.products for insert to authenticated wit
 create policy products_change on public.products for update to authenticated using (public.is_member(business_id)) with check (public.is_member(business_id));
 create policy products_delete on public.products for delete to authenticated using (public.is_admin(business_id));
 
+-- Table access is granted here, table by table, so the project can be
+-- created with "Grant API access to new tables automatically" switched
+-- off. Signed-in users get only what the policies above then narrow
+-- down; visitors who are not signed in get nothing at all.
+revoke all on public.businesses, public.members, public.invitations, public.products from anon;
+revoke all on public.businesses, public.members, public.invitations, public.products from authenticated;
+grant select, update                 on public.businesses  to authenticated;
+grant select                         on public.members     to authenticated;
+grant select, insert, delete         on public.invitations to authenticated;
+grant select, insert, update, delete on public.products    to authenticated;
+
 -- Only signed-in users may call the functions.
 revoke all on function public.create_business(text), public.accept_invitations(), public.remove_member(uuid, uuid) from public, anon;
 grant execute on function public.create_business(text), public.accept_invitations(), public.remove_member(uuid, uuid) to authenticated;

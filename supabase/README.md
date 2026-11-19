@@ -7,7 +7,10 @@ website yet; that starts once the project below exists.
 ## Setting up the project (once)
 
 1. Create a project at supabase.com. Name it CubePlanner and choose the
-   **Sydney** region.
+   specific **Sydney** region (not the general "Asia-Pacific" one). Under
+   Data access: keep **Enable Data API** on, switch **Grant API access to
+   new tables automatically** off (`schema.sql` grants exactly what is
+   needed), and switch **Enable RLS on new tables automatically** on.
 2. In **SQL Editor**, paste the whole of `schema.sql` and run it.
 3. In **Authentication → URL Configuration**, set the Site URL to
    `https://cubeplanner.app` and add `http://localhost:8173` to the
